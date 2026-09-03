@@ -594,25 +594,113 @@ document.addEventListener('DOMContentLoaded', () => {
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
-        if (typeof html2pdf !== 'undefined') {
-            document.body.appendChild(reportDiv);
-            const resetPdfButton = () => {
-                reportDiv.remove();
+        // Write directly with jsPDF instead of screenshotting HTML with
+        // html2canvas. The screenshot path can generate a blank page when the
+        // dashboard contains canvases, scrolling panels, or page-break rules.
+        const JsPdf = window.jspdf && window.jspdf.jsPDF;
+        if (JsPdf) {
+            try {
+                const pdf = new JsPdf({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+                const margin = 12;
+                const pageWidth = 210;
+                const pageHeight = 297;
+                const contentWidth = pageWidth - (margin * 2);
+                let y = margin;
+                const cleanText = (value) => String(value ?? '')
+                    .replace(/[\u2013\u2014]/g, '-')
+                    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '');
+                const nextPage = () => {
+                    pdf.addPage();
+                    y = margin;
+                };
+                const ensureSpace = (height) => {
+                    if (y + height > pageHeight - margin) nextPage();
+                };
+                const addHeading = (text) => {
+                    ensureSpace(9);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setFontSize(13);
+                    pdf.setTextColor(15, 23, 42);
+                    pdf.text(cleanText(text), margin, y);
+                    y += 7;
+                };
+                const addParagraph = (text, size = 9) => {
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.setFontSize(size);
+                    pdf.setTextColor(51, 65, 85);
+                    const lines = pdf.splitTextToSize(cleanText(text), contentWidth);
+                    lines.forEach((line) => {
+                        ensureSpace(5);
+                        pdf.text(line, margin, y);
+                        y += 4.2;
+                    });
+                    y += 2;
+                };
+                const addImage = (image, format, width, height, caption) => {
+                    if (!image) return;
+                    ensureSpace(height + 10);
+                    try {
+                        pdf.addImage(image, format, margin, y, width, height);
+                        y += height + 4;
+                        if (caption) addParagraph(caption, 8);
+                    } catch (imageError) {
+                        console.warn('Report image omitted:', imageError);
+                    }
+                };
+
+                pdf.setFillColor(isThreat ? 153 : 2, isThreat ? 27 : 132, isThreat ? 27 : 199);
+                pdf.rect(0, 0, pageWidth, 8, 'F');
+                pdf.setFont('helvetica', 'bold');
+                pdf.setFontSize(18);
+                pdf.setTextColor(15, 23, 42);
+                pdf.text('UAV SWARM INTELLIGENCE REPORT', margin, y + 7);
+                y += 15;
+                addParagraph(`Generated: ${new Date().toLocaleString()} | Source: ${meta.filename} | Resolution: ${meta.dimensions}`, 8);
+
+                addHeading('Inference Summary');
+                addParagraph(`Drone count: ${analytics.drone_count} | Alert level: ${analytics.alert} | Density: ${analytics.density} | Average confidence: ${analytics.average_confidence}%`);
+                addParagraph(`Confidence range: ${analytics.min_confidence}% - ${analytics.max_confidence}% | Detection footprint: ${analytics.detection_footprint}% | Alert threshold: ${analytics.threshold} UAVs`);
+                addParagraph(`Average bounding box: ${analytics.bbox_avg_width} x ${analytics.bbox_avg_height} px | Area range: ${analytics.bbox_smallest_area} - ${analytics.bbox_largest_area} px²`);
+                addParagraph(`Centroid: ${analytics.centroid_x}, ${analytics.centroid_y} px | Spread: ${analytics.spread_width} x ${analytics.spread_height} px | Standard deviation: X ${analytics.std_dev_x} px, Y ${analytics.std_dev_y} px | NND: ${analytics.nearest_neighbor_distance} px`);
+
+                addHeading('Annotated Detection Image');
+                addImage(document.getElementById('annotatedImg'), 'JPEG', contentWidth, 105, 'Annotated YOLO26s inference output.');
+
+                addHeading('AI Tactical Briefing');
+                addParagraph(rawLlmMarkdown || analytics.scene_analysis);
+                addHeading('Rule-Based Deterministic Analysis');
+                addParagraph(analytics.scene_analysis);
+
+                addHeading('Visual Analytics');
+                addImage(radarImgData, 'PNG', contentWidth, 70, 'Spatial coordinate radar.');
+                addImage(confidenceImgData, 'PNG', contentWidth, 70, 'Detection confidence distribution.');
+                addImage(sizeImgData, 'PNG', contentWidth, 70, 'Target size distribution.');
+
+                addHeading(`All Detected UAV Targets (${activeResultData.detections.length})`);
+                pdf.setFont('courier', 'bold');
+                pdf.setFontSize(8);
+                pdf.setTextColor(15, 23, 42);
+                ensureSpace(6);
+                pdf.text('#     Confidence     Center (X, Y)     Size (W x H)', margin, y);
+                y += 5;
+                activeResultData.detections.forEach((d, index) => {
+                    ensureSpace(5);
+                    pdf.setFont('courier', 'normal');
+                    pdf.setFontSize(8);
+                    const row = `${String(index + 1).padStart(3)}   ${(d.confidence * 100).toFixed(1).padStart(6)}%       ${Math.round(d.center_x)}, ${Math.round(d.center_y)}          ${Math.round(d.width)} x ${Math.round(d.height)} px`;
+                    pdf.text(row, margin, y);
+                    y += 4;
+                });
+
+                pdf.save(filename);
                 exportPdfBtn.removeAttribute('disabled');
                 exportPdfBtn.innerHTML = '📄 Export PDF Report';
-            };
-            // Allow two paint frames before capture. This prevents html2canvas
-            // from snapshotting the element before its content has been laid out.
-            window.requestAnimationFrame(() => {
-                window.requestAnimationFrame(() => {
-                    html2pdf().set(opt).from(reportDiv).save().then(() => {
-                        resetPdfButton();
-                    }).catch(err => {
-                        console.error("PDF generation failed:", err);
-                        resetPdfButton();
-                    });
-                });
-            });
+            } catch (err) {
+                console.error('PDF generation failed:', err);
+                exportPdfBtn.removeAttribute('disabled');
+                exportPdfBtn.innerHTML = '📄 Export PDF Report';
+                window.alert('PDF generation failed. Open the browser console for details.');
+            }
         } else {
             window.print();
             exportPdfBtn.removeAttribute('disabled');
