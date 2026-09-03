@@ -439,11 +439,13 @@ document.addEventListener('DOMContentLoaded', () => {
         reportDiv.style.backgroundColor = '#ffffff';
         reportDiv.style.color = '#0f172a';
         // html2pdf/html2canvas needs the source in the document in order to
-        // measure its complete height.  Keeping it outside the viewport avoids
-        // a visible duplicate report while still allowing every page to render.
-        reportDiv.style.position = 'fixed';
-        reportDiv.style.left = '-10000px';
+        // measure its complete height. Keep it at the document origin (rather
+        // than off-screen, which produces a blank canvas) and behind the app.
+        reportDiv.style.position = 'absolute';
+        reportDiv.style.left = '0';
         reportDiv.style.top = '0';
+        reportDiv.style.zIndex = '-1';
+        reportDiv.style.pointerEvents = 'none';
         reportDiv.style.width = '794px';
         reportDiv.style.boxSizing = 'border-box';
 
