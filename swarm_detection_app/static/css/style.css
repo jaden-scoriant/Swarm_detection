@@ -209,9 +209,10 @@ body {
    ========================================================================== */
 
 .deep-analytics-scroll-panel {
-  max-height: 720px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  /* Keep all analytical sections in the document flow.  A fixed-height,
+     scrollable panel can conceal report content and is not useful for print. */
+  max-height: none;
+  overflow: visible;
   padding: 18px;
   background-color: #fbfcfe;
   border: 1px solid #cbd5e1;

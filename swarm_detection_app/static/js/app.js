@@ -438,6 +438,14 @@ document.addEventListener('DOMContentLoaded', () => {
         reportDiv.style.fontFamily = "'Inter', sans-serif";
         reportDiv.style.backgroundColor = '#ffffff';
         reportDiv.style.color = '#0f172a';
+        // html2pdf/html2canvas needs the source in the document in order to
+        // measure its complete height.  Keeping it outside the viewport avoids
+        // a visible duplicate report while still allowing every page to render.
+        reportDiv.style.position = 'fixed';
+        reportDiv.style.left = '-10000px';
+        reportDiv.style.top = '0';
+        reportDiv.style.width = '794px';
+        reportDiv.style.boxSizing = 'border-box';
 
         const headerColor = isThreat ? '#991b1b' : '#0284c7';
         const threatTag = isThreat ? `
@@ -524,8 +532,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>
 
-            <!-- Target Detection Details Table (Top 10) -->
-            <div style="page-break-inside: avoid;">
+            <!-- Target Detection Details Table -->
+            <div>
                 <div style="font-size: 10px; font-weight: bold; color: #64748b; margin-bottom: 6px; text-transform: uppercase;">Detected Targets Summary</div>
                 <table style="width: 100%; border-collapse: collapse; font-size: 10px; font-family: monospace;">
                     <thead>
@@ -539,8 +547,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         </tr>
                     </thead>
                     <tbody>
-                        ${activeResultData.detections.slice(0, 15).map((d, i) => `
-                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                        ${activeResultData.detections.map((d, i) => `
+                            <tr style="border-bottom: 1px solid #f1f5f9; page-break-inside: avoid; break-inside: avoid;">
                                 <td style="padding: 4px 6px; font-weight: bold;">#${i + 1}</td>
                                 <td style="padding: 4px 6px;">${(d.confidence * 100).toFixed(1)}%</td>
                                 <td style="padding: 4px 6px;">${Math.round(d.center_x)} px</td>
@@ -561,17 +569,25 @@ document.addEventListener('DOMContentLoaded', () => {
             filename: filename,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true, logging: false },
+            // Let html2pdf divide long briefing and target-table content across
+            // pages.  Do not mark the entire table as unbreakable: that can
+            // push it beyond the final page and make rows appear missing.
+            pagebreak: { mode: ['css', 'legacy'], avoid: ['img', 'tr'] },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
         if (typeof html2pdf !== 'undefined') {
-            html2pdf().set(opt).from(reportDiv).save().then(() => {
+            document.body.appendChild(reportDiv);
+            const resetPdfButton = () => {
+                reportDiv.remove();
                 exportPdfBtn.removeAttribute('disabled');
                 exportPdfBtn.innerHTML = '📄 Export PDF Report';
+            };
+            html2pdf().set(opt).from(reportDiv).save().then(() => {
+                resetPdfButton();
             }).catch(err => {
                 console.error("PDF generation failed:", err);
-                exportPdfBtn.removeAttribute('disabled');
-                exportPdfBtn.innerHTML = '📄 Export PDF Report';
+                resetPdfButton();
             });
         } else {
             window.print();
