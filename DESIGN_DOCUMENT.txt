@@ -1,0 +1,1162 @@
+================================================================================
+                                DESIGN DOCUMENT
+                     UAV Swarm Detection & Scene Analytics
+================================================================================
+
+An On-Premises, Fully Local Edge Computer Vision Platform for Multi-UAV Swarm
+Detection, Spatial Clustering Analysis, and Tactical Scene Characterization
+
+--------------------------------------------------------------------------------
+Document Type:       Technical Architecture & Software Design Specification
+Deployment Model:    Fully Offline, On-Premises / Local GPU Workstation
+Status:              Implemented Architecture
+Release Target:      Production / Analytical Defense & Surveillance Evaluation
+Confidentiality:     Internal Engineering & Research Specification
+================================================================================
+
+
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+1.  Introduction & Document Purpose
+2.  Product Summary & Executive Overview
+3.  Design Goals & Core Principles
+4.  Non-Goals & Operational Constraints
+5.  Technology Stack Specification
+6.  End-to-End System Overview & Pipeline Lifecycle
+7.  Repository & Codebase Architecture
+    7.1 Directory & File Layout
+    7.2 Module Separation of Concerns
+8.  User Roles & Operational Personas
+9.  Core User & System Flows
+    9.1 Client-Side File Staging & Metadata Inspection Flow
+    9.2 Image Ingestion & GPU Detection Flow
+    9.3 Post-Detection Spatial & Swarm Analytics Flow
+    9.4 Visual Hydration & Interactive Rendering Flow
+    9.5 Annotated Image Export Flow
+    9.6 System Health & Hardware Telemetry Flow
+10. System Architecture & Topology
+    10.1 High-Level System Context (Textual Architecture Diagram)
+    10.2 Tiered Layer Architecture & Boundary Isolation
+11. UAV Detection Subsystem Architecture (detector.py)
+    11.1 Lifecycle & GPU Model Initialization Paradigm
+    11.2 Inference Execution & Bounding Box Extraction
+    11.3 Custom Analytical Image Annotation Engine
+12. Datasets & Ground Truth Specifications
+    [TO BE FILLED BY AUTHOR - DATASET SPECIFICATIONS, ANNOTATIONS & PREPARATION]
+13. Model Training & Validation Baseline
+    [TO BE FILLED BY AUTHOR - MODEL TRAINING HYPERPARAMETERS, PIPELINE & VALIDATION RUNS]
+14. Analytics Engine Subsystem Architecture (analytics.py)
+    14.1 Metric Ingestion & Normalization
+    14.2 Confidence Statistics & Distribution
+    14.3 Swarm Density Taxonomy & Categorization
+    14.4 Configurable Swarm Alert Heuristic
+    14.5 Estimated Detection Footprint (%) Formulation
+    14.6 Bounding Box Spatial Geometry & Dimensional Statistics
+    14.7 Global Centroid & Spatial Dispersion Bounding Envelope
+    14.8 Nearest Neighbor Distance (NND) Spatial Clustering
+    14.9 Deterministic Scene Analysis Generator & Sector Mapping
+15. Frontend Presentation Layer Architecture
+    15.1 Zero Raw-JSON Display Policy & DOM Hydration
+    15.2 Visual Design System & Technical UI Language
+    15.3 HTML5 Canvas Spatial Distribution Visualization Engine
+    15.4 Density Scale Progress Indicator Component
+    15.5 Tabular Detection Inspector
+    15.6 Client-Side Pre-Upload Probing & Validation
+16. REST API Surface & Data Contracts
+    16.1 POST /api/detect
+    16.2 GET /api/health
+    16.3 GET /
+    16.4 Global Exception & Error Handling Contracts (413, 500, 503)
+17. In-Memory Data Models & JSON Schemas
+    17.1 Internal Detection Object Model
+    17.2 Analytics Payload Schema
+    17.3 API Composite Response Schema
+18. Storage Lifecycle & File System Management
+    18.1 UUID Naming & Path Traversal Mitigation
+    18.2 Ingestion & Static Output Directories
+    18.3 Rolling Expiration & Cache Purge Daemon
+19. Hardware Acceleration & CUDA Runtime Architecture
+    19.1 Target Hardware Baseline (RTX 5060 Ti, CUDA 13.0)
+    19.2 Single-Process GPU Memory Persistence
+    19.3 Graceful CPU Fallback Mechanism
+20. Configuration Management Subsystem (config.py)
+21. System Observability, Logging & Startup Diagnostics
+22. Error Handling & System Resilience Matrix
+23. Security & Air-Gapped Operational Posture
+24. Deployment & Infrastructure Topology
+25. Verification & Testing Methodology
+26. Future Enhancements & Technical Roadmap
+27. Appendix: Master Index of Textual Architecture Diagrams
+
+
+================================================================================
+1. INTRODUCTION & DOCUMENT PURPOSE
+================================================================================
+
+This document provides the authoritative technical architecture, component 
+design, mathematical formulations, data flow models, and operational 
+specifications for the UAV Swarm Detection & Scene Analytics platform.
+
+This specification serves as the comprehensive engineering blueprint for 
+software engineers, machine learning operations (MLOps) personnel, computer 
+vision specialists, and system evaluators responsible for deploying, verifying, 
+maintaining, and extending the platform.
+
+The system is structured with strict separation across the web server, model 
+detector, analytics engine, and browser interface, ensuring testability, low 
+latency GPU execution, and reliable offline operation.
+
+
+================================================================================
+2. PRODUCT SUMMARY & EXECUTIVE OVERVIEW
+================================================================================
+
+The UAV Swarm Detection application is a standalone, local analytical computer 
+vision platform. It processes aerial imagery to detect multiple unmanned aerial 
+vehicles (UAVs / drones), quantify swarm characteristics, evaluate spatial 
+distribution, compute proximity clustering, classify swarm density, trigger 
+configurable alert states, and produce human-readable scene characterizations.
+
+Unlike standard object-detection demonstration scripts that simply overlay 
+bounding boxes or dump raw JSON arrays, this application serves as an advanced 
+analytical dashboard. It extracts structural spatial parameters from detection 
+coordinates to provide instant, actionable aerial intelligence.
+
+Target Operational Use Cases:
+- Tactical and air-space perimeter surveillance monitoring.
+- High-altitude aerial reconnaissance image analysis.
+- Multi-UAV swarm density and formation assessment.
+- Localized post-flight telemetry and sensor payload analysis.
+- Offline technical evaluations and executive demonstrations.
+
+
+================================================================================
+3. DESIGN GOALS & CORE PRINCIPLES
+================================================================================
+
+The architecture is governed by the following engineering priorities:
+
+- 100% Local & Air-Gapped Execution:
+  Zero dependency on external networks, third-party APIs, cloud inference, or 
+  remote model serving. All computations execute on the local workstation.
+
+- Low-Latency GPU Acceleration:
+  Leverage dedicated NVIDIA GPU hardware via CUDA and PyTorch for high-resolution 
+  (1280x1280) inference with sub-second turnaround.
+
+- Single-Load Model Memory Persistence:
+  Initialize and load the trained neural network weights into GPU VRAM exactly 
+  once on application startup, avoiding repetitive disk-to-VRAM transfer latency.
+
+- Strict Tiered Separation of Concerns:
+  Maintain a clear modular hierarchy: Flask Server -> UAVDetector -> Analytics 
+  Engine -> Frontend Presentation.
+
+- Zero Raw-JSON UI Discipline:
+  The user interface must never present raw JSON dumps, debug trees, or Python 
+  dictionaries. All internal metrics are transformed into structured visual 
+  widgets, KPI cards, interactive canvases, progress scales, and sorted tables.
+
+- Deterministic & Objective Scene Analysis:
+  Generate structured, natural-language scene characterizations using deterministic 
+  heuristic rule engines based strictly on spatial mathematics, avoiding external 
+  LLM calls, non-deterministic hallucinations, or ungrounded threat inferences.
+
+
+================================================================================
+4. NON-GOALS & OPERATIONAL CONSTRAINTS
+================================================================================
+
+To maintain system integrity, strict boundaries are defined:
+
+- No Cloud Services: No external cloud inference endpoints, AWS/GCP/Azure 
+  dependencies, or remote database synchronization.
+- No External LLMs: No OpenAI, Anthropic, or remote language model API calls.
+- No Heavy Frontend Frameworks: No React, Angular, or complex Node.js build 
+  pipelines. Standard HTML5, CSS3, and vanilla JavaScript ensure zero-build, 
+  instant local serving.
+- No Subjective Threat Inferences: The system evaluates spatial density and 
+  numerical thresholds only. It does not infer hostile intent, weaponization, 
+  or military combat status.
+
+
+================================================================================
+5. TECHNOLOGY STACK SPECIFICATION
+================================================================================
+
++-----------------------+------------------------------------------------------+
+| Layer                 | Technology & Specification                           |
++-----------------------+------------------------------------------------------+
+| Operating System      | Linux / Ubuntu 24.04 LTS (x86_64) / Windows Host     |
+| Python Runtime        | Python 3.11 (Conda Environment: uavswarm)            |
+| Deep Learning Engine  | PyTorch 2.1.0+ / 2.13.0+cu130                        |
+| CUDA Driver & Toolkit | NVIDIA CUDA 13.0 / CUDA 12.x Compatible Driver       |
+| Target GPU Hardware   | NVIDIA GeForce RTX 5060 Ti (~16 GB VRAM)             |
+| CPU Architecture      | Intel Core i7-14700F (28 Threads, 31 GB Host RAM)    |
+| Object Detection Core | Ultralytics YOLO26s (Version 8.4.129+)               |
+| Computer Vision Lib   | OpenCV (opencv-python >= 4.8.0)                      |
+| Backend Web Server    | Flask (3.0.0+) with Werkzeug Utilities               |
+| Frontend UI Framework | Bootstrap 5.3.2 (Responsive Grid & Typography)       |
+| Graphical Subsystem   | HTML5 2D Canvas API & Custom CSS3 Design System      |
+| Supported Media Formats| JPEG, JPG, PNG, WEBP                                 |
++-----------------------+------------------------------------------------------+
+
+
+================================================================================
+6. END-TO-END SYSTEM OVERVIEW & PIPELINE LIFECYCLE
+================================================================================
+
+The application lifecycle transitions seamlessly from local file ingestion to 
+deep GPU inference, mathematical coordinate reduction, and visual hydration:
+
+--------------------------------------------------------------------------------
+                           END-TO-END PIPELINE FLOW
+--------------------------------------------------------------------------------
+
+ [ User Browser ] ──( 1. Select / Drag Image )
+         │
+         ▼
+ [ Local Client Inspection ] ──( FileReader probes resolution & file size )
+         │
+         ▼
+ [ Multipart POST /api/detect ]
+         │
+         ▼
+ [ Flask Server (app.py) ] ──( Validate format & write to uploads/ with UUID )
+         │
+         ▼
+ [ UAVDetector (detector.py) ]
+   ├── Runs YOLO26s on GPU (imgsz=1280, conf=0.25, device=0)
+   ├── Extracts raw detections: [x1, y1, x2, y2, conf, cls]
+   └── Draws custom high-contrast overlays -> static/outputs/<uuid>_annotated.jpg
+         │
+         ▼
+ [ Analytics Engine (analytics.py) ]
+   ├── Computes Drone Count & Confidence Statistics (Avg, Min, Max)
+   ├── Classifies Swarm Density & Evaluates Alert Threshold
+   ├── Calculates Estimated Footprint & Bounding Box Geometric Averages
+   ├── Computes Centroid, Spatial Spread Box, & Nearest Neighbor Distance (NND)
+   └── Generates Deterministic Natural-Language Scene Analysis
+         │
+         ▼
+ [ JSON Serialization ] ──( Return Structured Payload & Image URL to Browser )
+         │
+         ▼
+ [ Frontend Controller (app.js) ]
+   ├── Renders KPI Metric Cards & Formats Alert Badges
+   ├── Toggles Active Segment on Visual Density Scale
+   ├── Draws Normalized Spatial Map on HTML5 Canvas
+   ├── Populates Sorted Bounding Box Inspection Table
+   └── Hydrates Scene Analysis Block & Enables Image Download
+--------------------------------------------------------------------------------
+
+
+================================================================================
+7. REPOSITORY & CODEBASE ARCHITECTURE
+================================================================================
+
+7.1 Directory & File Layout
+--------------------------
+The codebase is structured under the root project directory:
+`/mnt/ssd4tb/swarm_detection/swarm_detection_app/`
+
+swarm_detection_app/
+│
+├── app.py                  # Primary Flask application entry point & API routes
+├── config.py               # Central configuration loader & environment mappings
+├── detector.py             # UAVDetector wrapper class for YOLO26s inference
+├── analytics.py            # Swarm spatial analytics & scene summary generator
+├── utils.py                # Hardware inspection, GPU detection, file validation
+├── requirements.txt        # Pinned Python package dependencies
+├── README.md               # Operational guide, setup commands, & API docs
+├── DESIGN_DOCUMENT.txt     # Authoritative technical design specification
+│
+├── templates/
+│   └── index.html          # Single-page Bootstrap 5 analytics dashboard UI
+│
+├── static/
+│   ├── css/
+│   │   └── style.css       # Custom technical UI stylesheet
+│   ├── js/
+│   │   └── app.js          # Client-side controller, AJAX, & Canvas renderer
+│   └── outputs/
+│       └── .gitkeep        # Storage repository for generated annotated imagery
+│
+└── uploads/
+    └── .gitkeep            # Ingestion cache for raw user uploads
+
+
+7.2 Module Separation of Concerns
+---------------------------------
+- config.py: Decouples runtime constants from application logic. Reads environment 
+  variables with safe production fallbacks.
+- detector.py: Strictly encapsulates the Ultralytics YOLO model. Knows only how 
+  to load weights, infer on tensors, extract bounding boxes, and draw image overlays.
+- analytics.py: Pure mathematical and statistical engine. Completely independent 
+  of Flask and YOLO. Accepts raw bounding box arrays and returns structured metrics.
+- utils.py: Provides system-level helpers (GPU name discovery, torch CUDA checking, 
+  extension whitelisting, and file age cleanup).
+- app.py: Lightweight orchestration layer. Handles HTTP routing, multipart 
+  uploads, error trapping, background cleanup, and JSON response assembly.
+- index.html & style.css: Provides modern layout, visual typography, and component cards.
+- app.js: Consumes API payloads internally, calculates Canvas projections, updates 
+  DOM nodes, and manages UI state transitions without displaying raw data.
+
+
+================================================================================
+8. USER ROLES & OPERATIONAL PERSONAS
+================================================================================
+
+1. Tactical / Surveillance Operator:
+   - Primary Goal: Rapidly upload aerial reconnaissance imagery to determine UAV 
+     presence, count, spatial distribution, and alert status.
+   - Primary Interaction: Drag-and-drop upload zone, 4 primary KPI cards, alert 
+     badge, and visual annotated image viewer.
+
+2. Computer Vision / Sensor Systems Engineer:
+   - Primary Goal: Evaluate model performance, detection confidence distributions, 
+     bounding box metrics, and spatial clustering fidelity.
+   - Primary Interaction: Nearest Neighbor Distance (NND), Detection Footprint %, 
+     confidence minimums/maximums, and the sorted Detected UAVs table.
+
+3. Systems Administrator / Evaluator:
+   - Primary Goal: Monitor GPU availability, CUDA status, inference resolution, 
+     upload storage limits, and system health.
+   - Primary Interaction: System Status bar (`/api/health`) and console logs.
+
+
+================================================================================
+9. CORE USER & SYSTEM FLOWS
+================================================================================
+
+9.1 Client-Side File Staging & Metadata Inspection Flow
+-------------------------------------------------------
+1. Operator navigates to `http://localhost:5000`.
+2. Operator drags an image file over the upload zone or clicks "Choose Image".
+3. `app.js` captures the `File` object and performs instant client-side validation:
+   - Checks file extension against `['jpg', 'jpeg', 'png', 'webp']`.
+   - Rejects unauthorized extensions with an immediate UI alert.
+4. `FileReader` loads the binary stream locally into an `Image()` object.
+5. The UI extracts:
+   - Original filename
+   - File size in megabytes (MB)
+   - Native pixel dimensions (Width x Height)
+6. The UI reveals the image preview thumbnail, displays the metadata, and enables 
+   the "Analyze Image" action button.
+
+9.2 Image Ingestion & GPU Detection Flow
+----------------------------------------
+1. Operator clicks "Analyze Image".
+2. UI disables the analyze button, masks the dashboard, and displays the loading 
+   animation ("Analyzing UAV Swarm... Running YOLO26s inference locally on GPU").
+3. `FormData` payload containing the image is sent via `POST /api/detect`.
+4. `app.py` triggers `purge_old_files()` to delete cached files older than 1 hour.
+5. Server generates a cryptographically secure UUID (`uuid.uuid4()`).
+6. Raw image is saved to `uploads/<UUID>_orig.<ext>`.
+7. `UAVDetector.detect()` receives the image path and executes CUDA inference at 
+   `imgsz=1280`, `conf=0.25` on GPU 0.
+8. Detector extracts all bounding boxes into normalized dictionaries:
+   `{x1, y1, x2, y2, width, height, center_x, center_y, confidence, class_id, class_name}`.
+9. Detector invokes OpenCV to draw high-contrast, professional bounding boxes and 
+   labels, saving the result to `static/outputs/<UUID>_annotated.<ext>`.
+
+9.3 Post-Detection Spatial & Swarm Analytics Flow
+-------------------------------------------------
+1. `app.py` passes the detection list and image dimensions to `analytics.py`.
+2. `calculate_analytics()` calculates:
+   - Summary confidence values (average, min, max).
+   - Swarm density category based on count boundaries.
+   - Swarm alert status based on `SWARM_THRESHOLD` (Default: 10).
+   - Detection footprint percentage relative to total frame area.
+   - Spatial spread dimensions and standard deviations ($\sigma_x, \sigma_y$).
+   - Nearest Neighbor Distance (NND) for spatial clustering analysis.
+   - Natural-language deterministic scene analysis summary.
+3. Server bundles metadata, detections, analytics, and image URLs into a JSON response.
+
+9.4 Visual Hydration & Interactive Rendering Flow
+-------------------------------------------------
+1. `app.js` receives the JSON payload.
+2. The loading mask is hidden, and the Result Dashboard is revealed.
+3. Top KPI cards are hydrated:
+   - Drone Count
+   - Average Confidence (formatted as percentage)
+   - Swarm Density
+   - Alert Level (with color-coded badge: `none`, `normal`, `swarm-alert`)
+4. Swarm Density Scale Widget updates by applying the `.active` class to the 
+   matching tier (Sparse -> Moderate -> Dense -> Very Dense -> Highly Dense).
+5. Secondary analytics cards populate with Min/Max confidence, Footprint %, 
+   Average Bounding Box Size, Spatial Spread, and Nearest Neighbor Distance.
+6. The HTML5 Canvas renders a 2D spatial coordinate map depicting drone centers, 
+   the overall swarm bounding envelope, and the global swarm centroid.
+7. The Scene Analysis text block displays the natural-language characterization.
+8. The Detected UAVs table is populated with individual detections sorted by 
+   confidence in descending order.
+
+9.5 Annotated Image Export Flow
+-------------------------------
+1. The user inspects the annotated image preview on the left dashboard card.
+2. The user clicks "Download Annotated Image".
+3. The browser downloads the processed image artifact directly from the static 
+   outputs directory.
+
+9.6 System Health & Hardware Telemetry Flow
+-------------------------------------------
+1. On initial page load, `app.js` dispatches an asynchronous `GET /api/health` request.
+2. Server queries PyTorch CUDA runtime:
+   - GPU Availability
+   - Hardware Name (e.g., "NVIDIA GeForce RTX 5060 Ti")
+   - PyTorch Version & Device Identifier
+   - Model Loading State & Configured Thresholds
+3. UI updates the top status indicator with a green pulsing dot ("GPU Inference Online") 
+   and populates the System Status metadata strip.
+
+
+================================================================================
+10. SYSTEM ARCHITECTURE & TOPOLOGY
+================================================================================
+
+10.1 High-Level System Context (Textual Architecture Diagram)
+-------------------------------------------------------------
+
++------------------------------------------------------------------------------+
+|                         OPERATOR BROWSER CLIENT                              |
+|                                                                              |
+|  +-----------------------+  +----------------------+  +-------------------+  |
+|  | File Upload & Preview |  | KPI Metrics & Badges |  | HTML5 Spatial Map |  |
+|  +-----------------------+  +----------------------+  +-------------------+  |
+|  | Annotated Image View  |  | Density Scale Bar    |  | Detections Table  |  |
+|  +-----------------------+  +----------------------+  +-------------------+  |
++---------------------------------------┬────────────────────────────────------+
+                                        │ HTTP / Multipart REST API
+                                        │ (Port 5000)
+                                        ▼
++------------------------------------------------------------------------------+
+|                         FLASK APPLICATION SERVER                             |
+|                                (app.py)                                      |
+|                                                                              |
+|  +------------------------+  +---------------------+  +-------------------+  |
+|  | Route Handlers         |  | Storage Purge       |  | Error Handlers    |  |
+|  | /api/detect, /api/health| | Daemon (1hr TTL)    |  | 413, 500, 503     |  |
+|  +-----------┬------------+  +---------------------+  +-------------------+  |
++--------------│---------------------------------------------------------------+
+               │
+       ┌───────┴────────────────────────┐
+       ▼                                ▼
++─────────────────────────────+  +─────────────────────────────────────────────+
+|      DETECTION ENGINE       |  |              ANALYTICS ENGINE               |
+|        (detector.py)        |  |               (analytics.py)                |
+|                             |  |                                             |
+|  +-----------------------+  |  |  +--------------------+ +-----------------+ |
+|  | UAVDetector Class     |  |  |  | Swarm Density Calc | | Alert Heuristic | |
+|  +-----------------------+  |  |  +--------------------+ +-----------------+ |
+|  | Ultralytics YOLO26s   |  |  |  | Spatial Centroid   | | Nearest Neighbor| |
+|  +-----------------------+  |  |  | & Spread Box       | | Distance (NND)  | |
+|  | OpenCV Custom Drawing |  |  |  +--------------------+ +-----------------+ |
+|  +-----------------------+  |  |  | Detection Footprint| | Scene Summary   | |
++--------------┬--------------+  |  | Percentage         | | Generator       | |
+               │                 |  +--------------------+ +-----------------+ |
+               │                 +─────────────────────────────────────────────+
+               ▼
++──────────────────────────────────────────────────────────────────────────────+
+|                       HARDWARE & EXECUTION RUNTIME                           |
+|                                                                              |
+|  +---------------------------+  +-----------------------------------------+  |
+|  | NVIDIA CUDA 13.0 Runtime  |  | GPU VRAM: RTX 5060 Ti (~16 GB)          |  |
+|  +---------------------------+  +-----------------------------------------+  |
+|  | PyTorch 2.1.0+ Tensor Ops |  | Local Storage: Ingestion & Static Cache |  |
+|  +---------------------------+  +-----------------------------------------+  |
++------------------------------------------------------------------------------+
+
+
+10.2 Tiered Layer Architecture & Boundary Isolation
+----------------------------------------------------
+1. Presentation Tier (Client Browser):
+   - Vanilla JS + Bootstrap 5.
+   - Strictly isolated from backend execution; communicates exclusively via JSON.
+   - Enforces the "Zero Raw-JSON" policy by converting all responses into visual widgets.
+
+2. Application / Routing Tier (Flask):
+   - Handles HTTP protocol compliance, payload size restrictions, and endpoint security.
+   - Coordinates file ingestion and cleanup without performing direct inference calculations.
+
+3. Computer Vision / Inference Tier (detector.py):
+   - Manages model lifecycle and GPU VRAM residency.
+   - Transforms raw pixel buffers into normalized coordinate sets and generates 
+     annotated image artifacts.
+
+4. Analytical Reasoning Tier (analytics.py):
+   - Operates as a stateless mathematical computation engine.
+   - Transforms bounding box geometry into spatial intelligence and deterministic 
+     natural-language narratives.
+
+
+================================================================================
+11. UAV DETECTION SUBSYSTEM ARCHITECTURE (detector.py)
+================================================================================
+
+11.1 Lifecycle & GPU Model Initialization Paradigm
+--------------------------------------------------
+To achieve optimal inference latency, the model follows a Single Initialization 
+Pattern. When the Flask server starts, `app.py` instantiates the `UAVDetector` class.
+
+- Model Path: `/mnt/ssd4tb/swarm_detection/runs/uavswarm_yolo26s_1280_100ep/weights/best.pt`
+- Device Target: CUDA GPU 0 (`device='0'`)
+- Resolution: `imgsz=1280`
+- Confidence Floor: `conf=0.25`
+
+The model weights are pinned in GPU VRAM across the entire server lifecycle. 
+Individual HTTP requests never trigger disk reads or model reloading.
+
+11.2 Inference Execution & Bounding Box Extraction
+--------------------------------------------------
+Upon invocation of `UAVDetector.detect(image_path, output_annotated_path)`:
+1. The image is passed to `self.model(...)` with specified parameters.
+2. The results tensor is parsed to extract bounding boxes in `xyxy` format:
+   - $x_1, y_1$: Top-left coordinate (pixels)
+   - $x_2, y_2$: Bottom-right coordinate (pixels)
+   - $w = x_2 - x_1$: Box width
+   - $h = y_2 - y_1$: Box height
+   - $c_x = x_1 + \frac{w}{2}$: Centroid X coordinate
+   - $c_y = y_1 + \frac{h}{2}$: Centroid Y coordinate
+   - Confidence: Scaled float $[0.0, 1.0]$
+   - Class ID & Class Name: Resolved from model dictionary (Class 0: "drone")
+3. The extracted detections are sorted in descending order of confidence score.
+
+11.3 Custom Analytical Image Annotation Engine
+----------------------------------------------
+Rather than relying on generic YOLO bounding box overlays, `detector.py` incorporates 
+a custom OpenCV rendering engine:
+- Palette: Technical Blue/Cyan (`BGR: (235, 140, 0)`), providing optimal contrast 
+  against aerial terrains (vegetation, desert, urban, sky).
+- Linework: 2-pixel precise rectangle borders around detected UAV targets.
+- Tag Header: High-visibility label displaying sequence index and confidence 
+  percentage (e.g., `#1 (98%)`).
+- Top-Edge Clipping Protection: Automatic boundary adjustment ensures tags near 
+  the top edge of the image frame ($y_1 \approx 0$) shift downward to prevent 
+  visual clipping:
+  `label_y = max(y1, text_h + 6)`
+
+
+================================================================================
+12. DATASETS & GROUND TRUTH SPECIFICATIONS
+================================================================================
+
+[TO BE FILLED BY AUTHOR - DATASET SPECIFICATIONS, ANNOTATIONS & PREPARATION]
+
+<!-- Placeholder for Dataset Sources, Sensor Platforms, Image Resolutions, 
+     Annotation Formats, Train/Val/Test Splits, and Environmental Diversity -->
+
+
+================================================================================
+13. MODEL TRAINING & VALIDATION BASELINE
+================================================================================
+
+[TO BE FILLED BY AUTHOR - MODEL TRAINING HYPERPARAMETERS, PIPELINE & VALIDATION RUNS]
+
+<!-- Placeholder for Training Hyperparameters, Backbone Architecture, Loss Functions, 
+     Epoch Count, Optimizer (SGD/AdamW), Precision/Recall Curves, and Validation Scores -->
+
+
+================================================================================
+14. ANALYTICS ENGINE SUBSYSTEM ARCHITECTURE (analytics.py)
+================================================================================
+
+14.1 Metric Ingestion & Normalization
+-------------------------------------
+The analytics engine is encapsulated in `calculate_analytics(detections, img_w, img_h, swarm_threshold)`. 
+It processes the raw detection array alongside native image dimensions, converting 
+pixel coordinates into normalized spatial indicators.
+
+14.2 Confidence Statistics & Distribution
+-----------------------------------------
+Given $N$ detections with confidence scores $C = \{c_1, c_2, \dots, c_N\}$ where $c_i \in [0, 1]$:
+- Average Confidence: $\bar{C} = \frac{1}{N} \sum_{i=1}^{N} (c_i \times 100)$
+- Minimum Confidence: $C_{\min} = \min(C) \times 100$
+- Maximum Confidence: $C_{\max} = \max(C) \times 100$
+(If $N=0$, all confidence metrics default to $0.0\%$).
+
+14.3 Swarm Density Taxonomy & Categorization
+--------------------------------------------
+Swarm density is classified into six distinct operational tiers:
+
++------------------+-----------------------+-----------------------------------+
+| Drone Count (N)  | Density Classification| Tactical Interpretation           |
++------------------+-----------------------+-----------------------------------+
+| N = 0            | No Drones Detected    | Airspace Clear                    |
+| 1 <= N <= 5      | Sparse                | Isolated Target Activity          |
+| 6 <= N <= 10     | Moderate              | Small Group Formation             |
+| 11 <= N <= 15    | Dense                 | Concentrated Swarm Configuration  |
+| 16 <= N <= 20    | Very Dense            | Saturated Swarm Pattern           |
+| N >= 21          | Highly Dense          | High-Density Multi-Target Swarm   |
++------------------+-----------------------+-----------------------------------+
+
+14.4 Configurable Swarm Alert Heuristic
+---------------------------------------
+The alert heuristic evaluates multi-target presence against a configurable threshold 
+(`SWARM_THRESHOLD`, default: 10):
+
+  alert = "NONE"         if N = 0
+  alert = "NORMAL"       if 1 <= N < SWARM_THRESHOLD
+  alert = "SWARM ALERT"  if N >= SWARM_THRESHOLD
+
+This provides immediate situational awareness without making unsupported tactical 
+assumptions.
+
+14.5 Estimated Detection Footprint (%) Formulation
+--------------------------------------------------
+Quantifies the percentage of the sensor frame occupied by detected bounding boxes:
+
+$$\text{Footprint (\%)} = \left( \frac{\sum_{i=1}^{N} (w_i \times h_i)}{W_{\text{image}} \times H_{\text{image}}} \right) \times 100$$
+
+Where $w_i, h_i$ are bounding box dimensions and $W_{\text{image}}, H_{\text{image}}$ 
+represent total image resolution.
+
+14.6 Bounding Box Spatial Geometry & Dimensional Statistics
+-----------------------------------------------------------
+- Mean Width: $\bar{w} = \frac{1}{N} \sum_{i=1}^{N} w_i$
+- Mean Height: $\bar{h} = \frac{1}{N} \sum_{i=1}^{N} h_i$
+- Smallest Bounding Box Area: $A_{\min} = \min_{i} (w_i \times h_i)$
+- Largest Bounding Box Area: $A_{\max} = \max_{i} (w_i \times h_i)$
+
+14.7 Global Centroid & Spatial Dispersion Bounding Envelope
+-----------------------------------------------------------
+- Swarm Centroid Coordinates:
+  $$\bar{X} = \frac{1}{N} \sum_{i=1}^{N} c_{x,i}, \quad \bar{Y} = \frac{1}{N} \sum_{i=1}^{N} c_{y,i}$$
+
+- Spatial Spread Bounding Dimensions:
+  $$\text{Spread}_W = \max_{i}(x_{2,i}) - \min_{i}(x_{1,i})$$
+  $$\text{Spread}_H = \max_{i}(y_{2,i}) - \min_{i}(y_{1,i})$$
+
+- Standard Deviation of Drone Centers:
+  $$\sigma_x = \sqrt{\frac{1}{N} \sum_{i=1}^{N} (c_{x,i} - \bar{X})^2}, \quad \sigma_y = \sqrt{\frac{1}{N} \sum_{i=1}^{N} (c_{y,i} - \bar{Y})^2}$$
+
+14.8 Nearest Neighbor Distance (NND) Spatial Clustering
+-------------------------------------------------------
+To quantify spatial clustering, the engine calculates the average Euclidean distance 
+from each drone centroid to its closest neighbor:
+
+$$\text{NND}_i = \min_{j \neq i} \sqrt{(c_{x,i} - c_{x,j})^2 + (c_{y,i} - c_{y,j})^2}$$
+$$\overline{\text{NND}} = \frac{1}{N} \sum_{i=1}^{N} \text{NND}_i \quad (\text{for } N > 1)$$
+
+Low $\overline{\text{NND}}$ values indicate tightly clustered flight formations, 
+while high values indicate dispersed flight paths.
+
+14.9 Deterministic Scene Analysis Generator & Sector Mapping
+------------------------------------------------------------
+The system generates human-readable scene summaries using a deterministic rule engine:
+1. Sector Location Partitioning:
+   - X-Axis: Left ($c_x < \frac{W}{3}$), Center ($\frac{W}{3} \le c_x \le \frac{2W}{3}$), Right ($c_x > \frac{2W}{3}$)
+   - Y-Axis: Upper ($c_y < \frac{H}{3}$), Central ($\frac{H}{3} \le c_y \le \frac{2H}{3}$), Lower ($c_y > \frac{2H}{3}$)
+   - Composite Sector: e.g., "upper-center sector" or "central region".
+2. Dispersion Factor:
+   - Fractional Spread: $F_w = \frac{\text{Spread}_W}{W_{\text{image}}}, F_h = \frac{\text{Spread}_H}{H_{\text{image}}}$
+   - Categorization:
+     * $F_w > 0.6 \lor F_h > 0.6 \implies$ "widely distributed across the coordinate space"
+     * $F_w < 0.25 \land F_h < 0.25 \implies$ "tightly clustered within the [Sector]"
+     * Otherwise $\implies$ "moderately spread across the [Sector]"
+3. Narrative Synthesis:
+   Assembles the drone count, confidence average, density classification, alert status, 
+   and spatial dispersion into a clean, objective paragraph without external LLM dependencies.
+
+
+================================================================================
+15. FRONTEND PRESENTATION LAYER ARCHITECTURE
+================================================================================
+
+15.1 Zero Raw-JSON Display Policy & DOM Hydration
+-------------------------------------------------
+Under no circumstances does the frontend render raw JSON payloads, debugging trees, 
+or serialized strings. JavaScript (`app.js`) consumes the JSON response in memory, 
+extracts typed properties, and binds them to structured DOM nodes:
+
+--------------------------------------------------------------------------------
+                         FRONTEND UI LAYOUT SCHEMATIC
+--------------------------------------------------------------------------------
+ +----------------------------------------------------------------------------+
+ | [Header] UAV Swarm Detection           [Status] (o) GPU Inference Online   |
+ |          AI-powered multi-UAV detection and scene analytics                |
+ +----------------------------------------------------------------------------+
+ | [System Strip] GPU: RTX 5060 Ti | CUDA: 0 | Model: YOLO26s | Threshold: 10 |
+ +----------------------------------------------------------------------------+
+ |                                                                            |
+ | +------------------------------------+  +--------------------------------+ |
+ | |          UPLOAD DROPZONE           |  |       SELECTED FILE INFO       | |
+ | |   Drag and drop aerial image       |  |  Filename: UAVSwarm-05.jpg     | |
+ | |   Supported: JPG/PNG/WEBP          |  |  Size: 1.42 MB | 812x428 px    | |
+ | |   [ Choose Image ]                 |  |  [ Analyze Image Button ]      | |
+ | +------------------------------------+  +--------------------------------+ |
+ |                                                                            |
+ | ========================= RESULT DASHBOARD =============================== |
+ |                                                                            |
+ | +---------------------------------+  +-----------------------------------+ |
+ | | DETECTION RESULT                |  | PRIMARY METRICS                   | |
+ | | [ Detected: 10 UAVs ]           |  | +---------------+ +-------------+ | |
+ | |                                 |  | | DRONE COUNT   | | AVG CONF    | | |
+ | |   +-------------------------+   |  | |      10       | |   91.4%     | | |
+ | |   |                         |   |  | +---------------+ +-------------+ | |
+ | |   |   Annotated Image       |   |  | | SWARM DENSITY | | ALERT LEVEL | | |
+ | |   |   Preview with Custom   |   |  | |   Moderate    | | SWARM ALERT | | |
+ | |   |   Bounding Box Overlays |   |  | +---------------+ +-------------+ | |
+ | |   |                         |   |  |                                   | |
+ | |   +-------------------------+   |  | DENSITY REFERENCE SCALE           | |
+ | | [ Download Annotated Image ]    |  | [Sparse][Moderate*][Dense][V.Dense| | |
+ | +---------------------------------+  +-----------------------------------+ |
+ |                                                                            |
+ | +------------------------------------------------------------------------+ |
+ | | SWARM ANALYTICS (GRID METRICS)                                         | |
+ | | - Min Confidence: 73.4%      - Max Confidence: 98.7%                   | |
+ | | - Detection Footprint: 2.1%  - Avg BBox Size: 38x34 px                 | |
+ | | - Spatial Spread: 640x310 px - Nearest Neighbor Distance: 42.1 px      | |
+ | +------------------------------------------------------------------------+ |
+ |                                                                            |
+ | +----------------------------------+  +----------------------------------+ |
+ | | SPATIAL DISTRIBUTION MAP (CANVAS)|  | SCENE ANALYSIS                   | |
+ | |  +----------------------------+  |  | "10 UAVs detected with average   | |
+ | |  | .   .       [Swarm Box]    |  |  |  confidence of 91.4%. Scene is   | |
+ | |  |    .     (X) Centroid      |  |  |  classified as Moderate swarm.   | |
+ | |  |       .         .          |  |  |  Units are moderately spread     | |
+ | |  +----------------------------+  |  |  across central sector."         | |
+ | |  Blue Dot=UAV | Red Cross=Centroid|  +----------------------------------+ |
+ | +----------------------------------+                                       |
+ |                                                                            |
+ | +------------------------------------------------------------------------+ |
+ | | DETECTED UAVS (SORTED TABLE)                                           | |
+ | | [#]  | [Confidence] | [Center X] | [Center Y] | [Width]   | [Height]   | |
+ | | #1   | 98.7%        | 1024 px    | 412 px     | 42 px     | 38 px      | |
+ | | #2   | 97.9%        | 887 px     | 365 px     | 35 px     | 34 px      | |
+ | +------------------------------------------------------------------------+ |
+ +----------------------------------------------------------------------------+
+
+15.2 Visual Design System & Technical UI Language
+-------------------------------------------------
+- Background: Off-white canvas (`#f8fafc`) providing high contrast and reducing visual fatigue.
+- Cards: Pure white containers (`#ffffff`) with subtle 1px slate borders (`#e2e8f0`) 
+  and soft 4px elevation shadows.
+- Typography: System sans-serif stack (`-apple-system`, `BlinkMacSystemFont`, `Segoe UI`, `Roboto`) 
+  with strict uppercase metric headers and distinct visual hierarchy.
+- Alert Badges: Restrained styling avoids aggressive full-screen flashes:
+  * NONE: Subtle gray (`#f1f5f9`, border: `#cbd5e1`)
+  * NORMAL: Soft emerald (`#ecfdf5`, border: `#a7f3d0`)
+  * SWARM ALERT: Soft crimson (`#fff5f5`, border: `#fecaca`, text: `#9b1c1c`)
+
+15.3 HTML5 Canvas Spatial Distribution Visualization Engine
+------------------------------------------------------------
+The spatial distribution map uses a native 2D HTML5 Canvas (`480x320` resolution) 
+to project drone positions:
+1. Coordinate Normalization:
+   $$x_{\text{norm}} = \frac{c_{x,i}}{W_{\text{image}}}, \quad y_{\text{norm}} = \frac{c_{y,i}}{H_{\text{image}}}$$
+   $$X_{\text{canvas}} = x_{\text{norm}} \times (W_{\text{canvas}} - 2 \cdot P) + P$$
+   $$Y_{\text{canvas}} = y_{\text{norm}} \times (H_{\text{canvas}} - 2 \cdot P) + P$$
+   (Where padding $P = 15\text{px}$).
+2. Grid Rendering: A subtle $5 \times 5$ grid provides coordinate reference lines.
+3. Swarm Region Envelope: A dashed teal bounding rectangle (`rgba(13, 148, 136, 0.25)`) 
+   encloses the outer boundaries of the detection cluster.
+4. Drone Target Pins: Solid blue dots (`#0284c7`) with outer rings and identification 
+   indices (`#1`, `#2`, etc.) matching the table rows.
+5. Global Centroid Crosshair: A high-visibility red crosshair (`#ef4444`) marking 
+   the overall swarm center of mass.
+
+15.4 Density Scale Progress Indicator Component
+-----------------------------------------------
+A five-segment horizontal scale visually represents density tiers:
+`[Sparse] -> [Moderate] -> [Dense] -> [Very Dense] -> [Highly Dense]`
+The active tier is dynamically highlighted with the accent color (`#0d9488`), 
+providing instant contextual orientation.
+
+15.5 Tabular Detection Inspector
+--------------------------------
+A responsive data table lists all positive detections sorted by confidence in 
+descending order, providing:
+- Detection Sequence (#)
+- Confidence Percentage
+- Center X (px) & Center Y (px)
+- Box Width (px) & Box Height (px)
+
+15.6 Client-Side Pre-Upload Probing & Validation
+------------------------------------------------
+Before dispatching network requests, `app.js` checks the selected file via 
+`FileReader` to extract dimensions, size, and format, preventing unnecessary 
+bandwidth and inference overhead for invalid files.
+
+
+================================================================================
+16. REST API SURFACE & DATA CONTRACTS
+================================================================================
+
+16.1 POST /api/detect
+---------------------
+Primary inference endpoint. Ingests raw image binaries, executes GPU detection, 
+calculates analytics, and returns comprehensive metadata.
+
+Request Specification:
+- Method: `POST`
+- Content-Type: `multipart/form-data`
+- Body Parameters:
+  * `image`: Binary image file (Required, max 10MB, formats: `.jpg`, `.jpeg`, `.png`, `.webp`)
+
+Response Specification (HTTP 200 OK):
+```json
+{
+  "status": "success",
+  "metadata": {
+    "filename": "UAVSwarm-05_000123.jpg",
+    "dimensions": "812 × 428",
+    "inference_resolution": "1280 × 1280",
+    "model": "YOLO26s",
+    "file_size_kb": 142.5
+  },
+  "detections": [
+    {
+      "class_id": 0,
+      "class_name": "drone",
+      "confidence": 0.9872,
+      "center_x": 450.5,
+      "center_y": 210.0,
+      "width": 34.0,
+      "height": 28.0,
+      "x1": 433.5,
+      "y1": 196.0,
+      "x2": 467.5,
+      "y2": 224.0
+    }
+  ],
+  "analytics": {
+    "drone_count": 10,
+    "average_confidence": 91.4,
+    "min_confidence": 73.4,
+    "max_confidence": 98.7,
+    "density": "Moderate",
+    "alert": "SWARM ALERT",
+    "threshold": 10,
+    "detection_footprint": 2.145,
+    "bbox_avg_width": 36.2,
+    "bbox_avg_height": 31.8,
+    "bbox_smallest_area": 512.0,
+    "bbox_largest_area": 1420.0,
+    "centroid_x": 412.5,
+    "centroid_y": 215.3,
+    "spread_width": 640.0,
+    "spread_height": 310.0,
+    "std_dev_x": 145.2,
+    "std_dev_y": 88.4,
+    "nearest_neighbor_distance": 42.1,
+    "scene_analysis": "10 UAVs detected with an average confidence of 91.4%..."
+  },
+  "annotated_image_url": "/static/outputs/8f1e2d4a-3b5c-4d7e-9f0a-1b2c3d4e5f6a_annotated.jpg"
+}
+```
+
+16.2 GET /api/health
+--------------------
+System health, PyTorch CUDA verification, and configuration endpoint.
+
+Request Specification:
+- Method: `GET`
+
+Response Specification (HTTP 200 OK):
+```json
+{
+  "status": "Ready",
+  "model_loaded": true,
+  "load_error": null,
+  "gpu_availability": true,
+  "gpu_name": "NVIDIA GeForce RTX 5060 Ti",
+  "device": "CUDA:0",
+  "model": "YOLO26s",
+  "image_size": 1280,
+  "confidence_threshold": 0.25,
+  "swarm_threshold": 10
+}
+```
+
+16.3 GET /
+----------
+Serves the single-page application dashboard (`templates/index.html`).
+
+16.4 Global Exception & Error Handling Contracts
+------------------------------------------------
+- HTTP 400 Bad Request:
+  ```json
+  { "error": "Unsupported file format. Use JPG, JPEG, PNG, or WEBP." }
+  ```
+- HTTP 413 Payload Too Large:
+  ```json
+  { "error": "Image file exceeds maximum upload size of 10MB." }
+  ```
+- HTTP 503 Service Unavailable (Model not initialized):
+  ```json
+  {
+    "error": "Detector model is not initialized.",
+    "detail": "Model weight file not found at: /mnt/ssd4tb/..."
+  }
+  ```
+
+
+================================================================================
+17. IN-MEMORY DATA MODELS & JSON SCHEMAS
+================================================================================
+
+17.1 Internal Detection Object Model
+------------------------------------
+```python
+{
+    'x1': float,         # Left bounding box coordinate
+    'y1': float,         # Top bounding box coordinate
+    'x2': float,         # Right bounding box coordinate
+    'y2': float,         # Bottom bounding box coordinate
+    'width': float,      # x2 - x1
+    'height': float,     # y2 - y1
+    'center_x': float,   # x1 + width / 2
+    'center_y': float,   # y1 + height / 2
+    'confidence': float, # Model confidence [0.0 - 1.0]
+    'class_id': int,     # Zero-indexed target class (0)
+    'class_name': str    # Target label ("drone")
+}
+```
+
+17.2 Analytics Payload Schema
+-----------------------------
+```python
+{
+    'drone_count': int,                # Total positive detections
+    'average_confidence': float,       # Mean confidence (%)
+    'min_confidence': float,           # Minimum confidence (%)
+    'max_confidence': float,           # Maximum confidence (%)
+    'density': str,                    # Density category label
+    'alert': str,                      # "NONE" | "NORMAL" | "SWARM ALERT"
+    'threshold': int,                  # Active threshold value
+    'detection_footprint': float,      # Coverage (%)
+    'bbox_avg_width': float,           # Mean bounding box width (px)
+    'bbox_avg_height': float,          # Mean bounding box height (px)
+    'bbox_smallest_area': float,       # Minimum bounding box area (px^2)
+    'bbox_largest_area': float,        # Maximum bounding box area (px^2)
+    'centroid_x': float,               # Center of mass X (px)
+    'centroid_y': float,               # Center of mass Y (px)
+    'spread_width': float,             # Spread bounding box width (px)
+    'spread_height': float,            # Spread bounding box height (px)
+    'std_dev_x': float,                # Standard deviation along X
+    'std_dev_y': float,                # Standard deviation along Y
+    'nearest_neighbor_distance': float,# Mean nearest neighbor distance (px)
+    'scene_analysis': str              # Natural-language summary
+}
+```
+
+
+================================================================================
+18. STORAGE LIFECYCLE & FILE SYSTEM MANAGEMENT
+================================================================================
+
+18.1 UUID Naming & Path Traversal Mitigation
+--------------------------------------------
+To prevent directory traversal attacks, filename collisions, and overwriting, all 
+incoming uploads are renamed using randomly generated UUIDs:
+- Raw Ingestion: `<UUID>_orig.<ext>`
+- Annotated Artifact: `<UUID>_annotated.<ext>`
+
+Original filenames are preserved solely in memory for UI presentation via 
+`werkzeug.utils.secure_filename`.
+
+18.2 Ingestion & Static Output Directories
+------------------------------------------
+- Ingestion Cache: `swarm_detection_app/uploads/`
+- Static Output Cache: `swarm_detection_app/static/outputs/`
+
+18.3 Rolling Expiration & Cache Purge Daemon
+--------------------------------------------
+To prevent disk exhaustion during continuous operations, `purge_old_files()` 
+runs synchronously on each detection request:
+- Expiration Threshold: Files older than 3600 seconds (1 hour) are deleted.
+- Safety: Directory placeholders (`.gitkeep`) are strictly ignored.
+
+
+================================================================================
+19. HARDWARE ACCELERATION & CUDA RUNTIME ARCHITECTURE
+================================================================================
+
+19.1 Target Hardware Baseline
+-----------------------------
+- GPU: NVIDIA GeForce RTX 5060 Ti (~16 GB VRAM)
+- Driver & CUDA: CUDA 13.0 (Driver >= 570.x)
+- Host CPU: Intel Core i7-14700F (28 CPU Threads, ~31 GB RAM)
+- Host Storage: High-speed NVMe/SSD storage (`/mnt/ssd4tb/`)
+
+19.2 Memory Management & Single Initialization Pattern
+------------------------------------------------------
+The YOLO26s model allocates approximately 1.5 GB to 2.5 GB of VRAM during 1280x1280 
+tensor operations. Retaining the model in VRAM across requests eliminates CUDA 
+context initialization overhead, keeping per-frame latency under 50ms on modern GPUs.
+
+19.3 Graceful CPU Fallback Mechanism
+------------------------------------
+If CUDA is unavailable or the GPU is absent, `utils.py` flags `cuda_available=False` 
+and the system falls back to CPU execution (`device='cpu'`), ensuring continuous 
+operation in non-GPU evaluation environments.
+
+
+================================================================================
+20. CONFIGURATION MANAGEMENT SUBSYSTEM (config.py)
+================================================================================
+
+Configuration values are resolved using a two-tier precedence hierarchy:
+1. System Environment Variables (Highest Priority)
+2. Built-in Production Defaults (Fallback)
+
++------------------+-----------------------+-----------------------------------+
+| Variable         | Environment Key       | Default Fallback Value            |
++------------------+-----------------------+-----------------------------------+
+| Model Weights    | MODEL_PATH            | /mnt/ssd4tb/swarm_detection/runs/ |
+|                  |                       | uavswarm_yolo26s_1280_100ep/      |
+|                  |                       | weights/best.pt                   |
+| Inference Size   | IMG_SIZE              | 1280                              |
+| Confidence Floor | CONF_THRESHOLD        | 0.25                              |
+| Alert Threshold  | SWARM_THRESHOLD       | 10                                |
+| Hardware Device  | DEVICE                | 0 (CUDA GPU 0)                    |
+| Max Upload Size  | MAX_UPLOAD_MB         | 10 (Megabytes)                    |
+| Ingestion Folder | UPLOAD_FOLDER         | <APP_DIR>/uploads                 |
+| Artifact Folder  | OUTPUT_FOLDER         | <APP_DIR>/static/outputs          |
++------------------+-----------------------+-----------------------------------+
+
+
+================================================================================
+21. SYSTEM OBSERVABILITY, LOGGING & STARTUP DIAGNOSTICS
+================================================================================
+
+Upon execution (`python app.py`), the server runs diagnostic checks and prints 
+a formatted startup banner:
+
+==================================================
+UAV SWARM DETECTION APPLICATION
+==================================================
+Model: YOLO26s
+Device: CUDA:0
+GPU: NVIDIA GeForce RTX 5060 Ti
+Image Size: 1280
+Confidence Threshold: 0.25
+Swarm Threshold: 10
+Server: http://0.0.0.0:5000
+==================================================
+
+Runtime telemetry is accessible at runtime via `GET /api/health`.
+
+
+================================================================================
+22. ERROR HANDLING & SYSTEM RESILIENCE MATRIX
+================================================================================
+
++------------------------+-------------------+---------------------------------+
+| Failure Mode           | HTTP Status Code  | System Mitigation Behavior      |
++------------------------+-------------------+---------------------------------+
+| Missing File Payload   | 400 Bad Request   | Returns structured error JSON   |
+| Unsupported Extension  | 400 Bad Request   | Rejects file with format list   |
+| File Exceeds 10MB      | 413 Payload Large | Trapped by Werkzeug handler     |
+| Missing Model Weights  | 503 Unavailable   | Flags model offline; logs path  |
+| CUDA Driver Exception  | 500 Server Error  | Returns traceback to error log  |
+| Zero Detections        | 200 OK            | Renders "No Drones" safe state  |
++------------------------+-------------------+---------------------------------+
+
+
+================================================================================
+23. SECURITY & AIR-GAPPED OPERATIONAL POSTURE
+================================================================================
+
+- Air-Gapped Operation: Zero outbound connections or external DNS resolutions.
+- Path Traversal Immunity: Strict UUID renaming ensures user filenames never touch 
+  the local file system.
+- Memory Leak Prevention: Scheduled cache eviction deletes temporary files after 1 hour.
+- Static Resource Isolation: Only processed artifacts within `static/outputs/` 
+  are exposed via HTTP endpoints.
+
+
+================================================================================
+24. DEPLOYMENT & INFRASTRUCTURE TOPOLOGY
+================================================================================
+
+The application runs as a self-contained local web server on the GPU workstation:
+
+--------------------------------------------------------------------------------
+                      DEPLOYMENT TOPOLOGY SCHEMATIC
+--------------------------------------------------------------------------------
+  +--------------------------------------------------------------------------+
+  |                   ON-PREMISES GPU WORKSTATION                            |
+  |                                                                          |
+  |  +--------------------------------------------------------------------+  |
+  |  | Conda Virtual Environment: 'uavswarm' (Python 3.11)               |  |
+  |  |                                                                    |  |
+  |  |  +----------------------+          +----------------------------+  |  |
+  |  |  | Flask WSGI Web Server| <======> | UAVDetector Engine         |  |  |
+  |  |  | (0.0.0.0:5000)       |          | (PyTorch + YOLO26s)        |  |  |
+  |  |  +----------▲-----------+          +-------------┬--------------+  |  |
+  |  +-------------│------------------------------------│-----------------+  |
+  |                │                                    │                    |
+  |                │ (Local Loopback)                   │ (Direct VRAM Bus)  |
+  |                ▼                                    ▼                    |
+  |  +---------------------------+        +-------------------------------+  |
+  |  | Local Workstation Browser |        | NVIDIA RTX 5060 Ti (CUDA:0)   |  |
+  |  | (http://localhost:5000)   |        | 16 GB VRAM - Model Pinned     |  |
+  |  +---------------------------+        +-------------------------------+  |
+  +--------------------------------------------------------------------------+
+
+Deployment Commands:
+```bash
+conda activate uavswarm
+cd /mnt/ssd4tb/swarm_detection/swarm_detection_app
+python app.py
+```
+
+
+================================================================================
+25. VERIFICATION & TESTING METHODOLOGY
+================================================================================
+
+Verification Test Plan:
+1. Server Initialization Test: Verify terminal banner prints GPU configuration.
+2. Health Check Probe: Execute `curl -s http://localhost:5000/api/health` and verify 
+   `"status": "Ready"`.
+3. Validation Image Ingestion: Upload known evaluation image:
+   `/mnt/ssd4tb/swarm_detection/UAVSwarm-yolo/images/val/UAVSwarm-05_000123.jpg`
+4. Detection Verification: Confirm detection of 10 UAV targets.
+5. Analytics Verification:
+   - Drone Count = 10
+   - Swarm Density = "Moderate"
+   - Alert Status = "SWARM ALERT" (Count $\ge 10$)
+   - Footprint % and NND calculated successfully.
+6. Canvas Mapping: Verify 10 blue pins, dashed boundary envelope, and red centroid crosshair.
+7. Image Download: Verify download of annotated image file.
+8. Error Handling Validation: Test unsupported `.txt` upload and oversized payloads.
+
+
+================================================================================
+26. FUTURE ENHANCEMENTS & TECHNICAL ROADMAP
+================================================================================
+
+- Multi-Frame Video Ingestion: Extend pipeline to process RTSP video streams and 
+  MP4 files with ByteTrack target association.
+- Temporal Trajectory Tracking: Calculate velocity vectors, direction headings, 
+  and collision likelihoods across consecutive frames.
+- Thermal / Multi-Spectral Channel Fusion: Add support for multi-band IR imagery.
+- Multi-GPU Distributed Serving: Support dynamic workload distribution across 
+  multiple GPU accelerators.
+
+
+================================================================================
+27. APPENDIX: MASTER INDEX OF TEXTUAL ARCHITECTURE DIAGRAMS
+================================================================================
+
+1. End-to-End Pipeline Flow (Section 6)
+   Illustrates lifecycle from image upload to GPU inference, analytics reduction, 
+   and UI hydration.
+
+2. System Context & Component Interaction Diagram (Section 10.1)
+   Details connections between Browser Client, Flask Server, UAVDetector, 
+   Analytics Engine, and CUDA hardware.
+
+3. Frontend UI Layout Schematic (Section 15.1)
+   Maps UI layout, KPI metric placement, spatial canvas container, and detection tables.
+
+4. On-Premises Deployment Topology (Section 24)
+   Illustrates physical hardware bindings, Conda environment boundaries, and 
+   GPU memory bus connections.
+
+================================================================================
+                          END OF DESIGN DOCUMENT
+================================================================================
