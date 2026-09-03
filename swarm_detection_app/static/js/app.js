@@ -16,6 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const threatBanner = document.getElementById('threatBanner');
     const threatBannerBadge = document.getElementById('threatBannerBadge');
 
+    // PDF Export Button
+    const exportPdfBtn = document.getElementById('exportPdfBtn');
+
     // Sliders & Controls
     const thresholdSlider = document.getElementById('thresholdSlider');
     const thresholdValBadge = document.getElementById('thresholdValBadge');
@@ -411,7 +414,173 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // 8. Render Detection Confidence Curve (Chart.js)
+    // 8. Export Full Intelligence Report as PDF
+    exportPdfBtn.addEventListener('click', () => {
+        if (!activeResultData) return;
+
+        exportPdfBtn.setAttribute('disabled', 'true');
+        exportPdfBtn.innerHTML = '⏳ Generating PDF...';
+
+        const analytics = activeResultData.analytics;
+        const meta = activeResultData.metadata;
+        const isThreat = analytics.alert === 'SWARM ALERT';
+
+        // Extract static chart & radar canvas images
+        const confidenceImgData = confidenceChartInstance ? confidenceChartInstance.toBase64Image() : '';
+        const sizeImgData = sizeChartInstance ? sizeChartInstance.toBase64Image() : '';
+        const radarCanvas = document.getElementById('spatialCanvas');
+        const radarImgData = radarCanvas ? radarCanvas.toDataURL('image/png') : '';
+        const annotatedImgSrc = document.getElementById('annotatedImg').src;
+
+        // Build standalone, printable PDF HTML container
+        const reportDiv = document.createElement('div');
+        reportDiv.style.padding = '24px';
+        reportDiv.style.fontFamily = "'Inter', sans-serif";
+        reportDiv.style.backgroundColor = '#ffffff';
+        reportDiv.style.color = '#0f172a';
+
+        const headerColor = isThreat ? '#991b1b' : '#0284c7';
+        const threatTag = isThreat ? `
+            <div style="background: linear-gradient(135deg, #7f1d1d, #b91c1c); color: #fff; padding: 12px 18px; border-radius: 8px; margin-bottom: 18px;">
+                <h2 style="margin: 0; font-size: 15px; font-weight: bold;">🚨 CRITICAL SWARM THREAT DETECTED (ALERT ACTIVE)</h2>
+                <p style="margin: 3px 0 0 0; font-size: 12px; color: #fecaca;">Target count exceeds threshold (${analytics.threshold} UAVs). Tactical formation active.</p>
+            </div>
+        ` : `
+            <div style="background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; padding: 10px 16px; border-radius: 8px; margin-bottom: 18px;">
+                <strong style="font-size: 13px;">🟢 NORMAL OPERATIONAL STATE</strong> - Swarm count within safe monitoring thresholds.
+            </div>
+        `;
+
+        reportDiv.innerHTML = `
+            <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h1 style="font-size: 20px; font-weight: 800; margin: 0; color: ${headerColor};">UAV SWARM INTELLIGENCE REPORT</h1>
+                        <p style="font-size: 11px; color: #64748b; margin: 2px 0 0 0;">Automated Computer Vision & Neural LLaMA 3 Analysis</p>
+                    </div>
+                    <div style="text-align: right; font-size: 11px; color: #64748b; font-family: monospace;">
+                        Date: ${new Date().toLocaleString()}<br>
+                        Source: ${meta.filename} (${meta.dimensions})
+                    </div>
+                </div>
+            </div>
+
+            ${threatTag}
+
+            <!-- Annotated Image & Primary Metrics -->
+            <div style="display: flex; gap: 16px; margin-bottom: 20px;">
+                <div style="flex: 1.2; text-align: center; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; background: #fafafa;">
+                    <img src="${annotatedImgSrc}" style="max-width: 100%; max-height: 260px; object-fit: contain; border-radius: 4px;">
+                    <p style="font-size: 10px; color: #64748b; margin: 4px 0 0 0;">Annotated YOLO26s Detections (1280px inference)</p>
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px;">
+                            <span style="font-size: 9px; font-weight: bold; color: #64748b; text-transform: uppercase;">Drone Count</span>
+                            <div style="font-size: 22px; font-weight: 800; color: ${isThreat ? '#991b1b' : '#0f172a'}; font-family: monospace;">${analytics.drone_count}</div>
+                        </div>
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px;">
+                            <span style="font-size: 9px; font-weight: bold; color: #64748b; text-transform: uppercase;">Avg Confidence</span>
+                            <div style="font-size: 22px; font-weight: 800; color: #0f172a; font-family: monospace;">${analytics.average_confidence}%</div>
+                        </div>
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px;">
+                            <span style="font-size: 9px; font-weight: bold; color: #64748b; text-transform: uppercase;">Swarm Density</span>
+                            <div style="font-size: 16px; font-weight: 800; color: #0d9488; font-family: monospace; margin-top: 4px;">${analytics.density}</div>
+                        </div>
+                        <div style="background: ${isThreat ? '#fee2e2' : '#f8fafc'}; border: 1px solid ${isThreat ? '#f87171' : '#e2e8f0'}; border-radius: 6px; padding: 10px;">
+                            <span style="font-size: 9px; font-weight: bold; color: #64748b; text-transform: uppercase;">Alert Level</span>
+                            <div style="font-size: 14px; font-weight: 800; color: ${isThreat ? '#991b1b' : '#166534'}; font-family: monospace; margin-top: 4px;">${analytics.alert}</div>
+                        </div>
+                    </div>
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; font-size: 10px; color: #475569;">
+                        <strong>Telemetry:</strong> Footprint: ${analytics.detection_footprint}% | NND: ${analytics.nearest_neighbor_distance} px | Spread: ${analytics.spread_width}×${analytics.spread_height} px
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI LLaMA 3 Briefing -->
+            <div style="border-left: 4px solid ${isThreat ? '#dc2626' : '#7c3aed'}; background: #fbfcfe; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; border-radius: 6px; padding: 14px; margin-bottom: 20px;">
+                <div style="font-size: 11px; font-weight: bold; color: ${isThreat ? '#991b1b' : '#7c3aed'}; margin-bottom: 8px;">AI TACTICAL BRIEFING (LLaMA 3 Neural Inference)</div>
+                <div style="font-size: 11px; line-height: 1.5; color: #334155;">
+                    ${marked.parse(rawLlmMarkdown)}
+                </div>
+            </div>
+
+            <!-- Visual Charts & Radar Canvas -->
+            <div style="page-break-inside: avoid; margin-bottom: 20px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                    <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; text-align: center; background: #fafafa;">
+                        <span style="font-size: 9px; font-weight: bold; color: #64748b;">SPATIAL COORDINATE RADAR</span>
+                        <img src="${radarImgData}" style="max-width: 100%; height: 130px; object-fit: contain; margin-top: 4px;">
+                    </div>
+                    <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; text-align: center; background: #fafafa;">
+                        <span style="font-size: 9px; font-weight: bold; color: #64748b;">CONFIDENCE SPECTRUM CURVE</span>
+                        <img src="${confidenceImgData}" style="max-width: 100%; height: 130px; object-fit: contain; margin-top: 4px;">
+                    </div>
+                    <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; text-align: center; background: #fafafa;">
+                        <span style="font-size: 9px; font-weight: bold; color: #64748b;">TARGET SIZE BREAKDOWN</span>
+                        <img src="${sizeImgData}" style="max-width: 100%; height: 130px; object-fit: contain; margin-top: 4px;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Target Detection Details Table (Top 10) -->
+            <div style="page-break-inside: avoid;">
+                <div style="font-size: 10px; font-weight: bold; color: #64748b; margin-bottom: 6px; text-transform: uppercase;">Detected Targets Summary</div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 10px; font-family: monospace;">
+                    <thead>
+                        <tr style="background: #f1f5f9; border-bottom: 1px solid #cbd5e1; text-align: left;">
+                            <th style="padding: 4px 6px;">#</th>
+                            <th style="padding: 4px 6px;">Confidence</th>
+                            <th style="padding: 4px 6px;">Center X</th>
+                            <th style="padding: 4px 6px;">Center Y</th>
+                            <th style="padding: 4px 6px;">Width</th>
+                            <th style="padding: 4px 6px;">Height</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${activeResultData.detections.slice(0, 15).map((d, i) => `
+                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                <td style="padding: 4px 6px; font-weight: bold;">#${i + 1}</td>
+                                <td style="padding: 4px 6px;">${(d.confidence * 100).toFixed(1)}%</td>
+                                <td style="padding: 4px 6px;">${Math.round(d.center_x)} px</td>
+                                <td style="padding: 4px 6px;">${Math.round(d.center_y)} px</td>
+                                <td style="padding: 4px 6px;">${Math.round(d.width)} px</td>
+                                <td style="padding: 4px 6px;">${Math.round(d.height)} px</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        const filename = `UAV_Swarm_Intelligence_Report_${new Date().toISOString().slice(0,19).replace(/[:T]/g, '_')}.pdf`;
+        
+        const opt = {
+            margin: [8, 8, 8, 8],
+            filename: filename,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: false },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        if (typeof html2pdf !== 'undefined') {
+            html2pdf().set(opt).from(reportDiv).save().then(() => {
+                exportPdfBtn.removeAttribute('disabled');
+                exportPdfBtn.innerHTML = '📄 Export PDF Report';
+            }).catch(err => {
+                console.error("PDF generation failed:", err);
+                exportPdfBtn.removeAttribute('disabled');
+                exportPdfBtn.innerHTML = '📄 Export PDF Report';
+            });
+        } else {
+            window.print();
+            exportPdfBtn.removeAttribute('disabled');
+            exportPdfBtn.innerHTML = '📄 Export PDF Report';
+        }
+    });
+
+    // 9. Render Detection Confidence Curve (Chart.js)
     function renderConfidenceCurveChart(detections, avgConfidence, isThreatActive) {
         const ctx = document.getElementById('confidenceChart').getContext('2d');
         
@@ -486,7 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 9. Render Target Size Breakdown Chart (Chart.js)
+    // 10. Render Target Size Breakdown Chart (Chart.js)
     function renderSizeDistributionChart(detections) {
         const ctx = document.getElementById('sizeChart').getContext('2d');
         
@@ -547,7 +716,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 10. Draw normalized coordinate radar map on HTML5 Canvas
+    // 11. Draw normalized coordinate radar map on HTML5 Canvas
     function drawSpatialDistribution(detections, dimensionsStr, analytics) {
         const canvas = document.getElementById('spatialCanvas');
         const ctx = canvas.getContext('2d');

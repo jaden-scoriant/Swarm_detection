@@ -74,6 +74,13 @@ body {
   padding: 18px 24px;
 }
 
+.slider-helper-text {
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: #64748b;
+  margin-top: 6px;
+}
+
 /* Range Sliders */
 .form-range::-webkit-slider-thumb {
   background: var(--accent-color);
@@ -182,6 +189,53 @@ body {
   border: 1px solid #f87171;
   box-shadow: 0 0 14px rgba(220, 38, 38, 0.25);
   animation: pulse-threat 2s infinite;
+}
+
+/* PDF Export Button */
+.btn-pdf-export {
+  background-color: #0f172a;
+  color: #ffffff;
+  border: 1px solid #334155;
+  transition: all 0.2s ease;
+}
+
+.btn-pdf-export:hover {
+  background-color: #1e293b;
+  color: #ffffff;
+}
+
+/* ==========================================================================
+   SCROLLABLE DEEP ANALYTICS PANEL
+   ========================================================================== */
+
+.deep-analytics-scroll-panel {
+  max-height: 720px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 18px;
+  background-color: #fbfcfe;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+/* Sleek WebKit Scrollbar */
+.deep-analytics-scroll-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.deep-analytics-scroll-panel::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 8px;
+}
+
+.deep-analytics-scroll-panel::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 8px;
+}
+
+.deep-analytics-scroll-panel::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 /* ==========================================================================
@@ -301,6 +355,22 @@ body {
 
 .threat-active #annotatedImageCard {
   border-color: #fca5a5 !important;
+}
+
+.threat-active .btn-pdf-export {
+  background-color: #dc2626 !important;
+  border-color: #b91c1c !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 14px rgba(220, 38, 38, 0.45) !important;
+}
+
+.threat-active .btn-pdf-export:hover {
+  background-color: #b91c1c !important;
+}
+
+.threat-active .deep-analytics-scroll-panel {
+  border-color: #fca5a5;
+  background-color: #fffafb;
 }
 
 /* Density Scale Visual Progress Indicator */
@@ -440,4 +510,20 @@ body {
   font-size: 0.75rem;
   color: var(--text-muted);
   margin-top: 6px;
+}
+
+/* Print / PDF Styling */
+@media print {
+  body {
+    background-color: #ffffff;
+  }
+  .deep-analytics-scroll-panel {
+    max-height: none !important;
+    overflow: visible !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+  .control-card, .upload-zone, header, footer, #recalculateBtn, .btn-pdf-export, #downloadLink, #copyAiReportBtn {
+    display: none !important;
+  }
 }

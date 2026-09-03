@@ -10,15 +10,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Bootstrap 5 CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- Chart.js & Marked.js -->
+  <!-- Chart.js, Marked.js, & html2pdf.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <!-- Custom Technical Stylesheet -->
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
 </head>
 <body class="py-4">
 
-  <div class="container" style="max-width: 1280px;">
+  <div class="container" style="max-width: 1320px;">
     
     <!-- HEADER -->
     <header class="d-flex flex-wrap align-items-center justify-content-between pb-3 mb-3 border-bottom border-subtle">
@@ -42,7 +43,7 @@
     <div class="row g-3 mb-4">
       
       <!-- System Telemetry Strip -->
-      <div class="col-lg-6">
+      <div class="col-lg-5">
         <div class="card-dashboard p-3 h-100">
           <h2 class="h6 uppercase text-muted fw-bold mb-2">System Telemetry</h2>
           <div class="row text-center text-md-start g-2">
@@ -66,8 +67,8 @@
         </div>
       </div>
 
-      <!-- Live Threshold & Filter Controls -->
-      <div class="col-lg-6">
+      <!-- Live Threshold & Filter Controls with Descriptive Notes -->
+      <div class="col-lg-7">
         <div class="control-card h-100">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <h2 class="h6 uppercase text-dark fw-bold mb-0">Inference & Alert Controls</h2>
@@ -75,24 +76,30 @@
               ⚡ Apply to Active Scene
             </button>
           </div>
-          <div class="row g-3 align-items-center">
+          <div class="row g-3 align-items-start">
             
-            <!-- Swarm Threshold Slider -->
+            <!-- Swarm Threshold Slider with Explanatory Note -->
             <div class="col-sm-6">
               <div class="d-flex justify-content-between align-items-center">
-                <label for="thresholdSlider" class="form-label small text-muted fw-semibold mb-0">Swarm Alert Threshold:</label>
+                <label for="thresholdSlider" class="form-label small text-muted fw-bold mb-0">Swarm Alert Threshold:</label>
                 <span id="thresholdValBadge" class="badge bg-dark font-mono">10 UAVs</span>
               </div>
               <input type="range" class="form-range mt-1" id="thresholdSlider" min="1" max="40" step="1" value="10">
+              <span class="slider-helper-text d-block">
+                ℹ️ <strong>Why it's needed:</strong> Defines the critical count boundary that shifts the system into a <strong>SWARM ALERT</strong> threat state vs routine isolated monitoring.
+              </span>
             </div>
 
-            <!-- Confidence Filter Slider -->
+            <!-- Confidence Filter Slider with Explanatory Note -->
             <div class="col-sm-6">
               <div class="d-flex justify-content-between align-items-center">
-                <label for="confSlider" class="form-label small text-muted fw-semibold mb-0">Confidence Filter:</label>
+                <label for="confSlider" class="form-label small text-muted fw-bold mb-0">Confidence Filter:</label>
                 <span id="confValBadge" class="badge bg-primary font-mono">25%</span>
               </div>
               <input type="range" class="form-range mt-1" id="confSlider" min="0.10" max="0.90" step="0.05" value="0.25">
+              <span class="slider-helper-text d-block">
+                ℹ️ <strong>Why it's needed:</strong> Sets minimum model certainty. Increase (e.g. 70%) to eliminate false alarms; decrease (e.g. 15%) to pick up tiny/distant UAVs.
+              </span>
             </div>
 
           </div>
@@ -181,7 +188,7 @@
         </div>
       </div>
 
-      <!-- Detection Result and Top KPI Summary -->
+      <!-- TOP FIXED PERSPECTIVE: Detection Result and Primary Metrics -->
       <section class="row g-4 mb-4">
         
         <!-- Large Annotated Image Card -->
@@ -192,13 +199,18 @@
               <span id="imgLabelCount" class="badge bg-secondary font-mono small">Detected: 0 UAVs</span>
             </h2>
             <div class="position-relative bg-light rounded overflow-hidden border border-subtle text-center p-2 mb-3">
-              <img id="annotatedImg" src="" alt="Annotated UAV detections" class="img-fluid rounded" style="max-height: 520px; object-fit: contain;">
+              <img id="annotatedImg" src="" alt="Annotated UAV detections" class="img-fluid rounded" style="max-height: 480px; object-fit: contain;">
             </div>
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-              <span class="text-muted small">Overlay tags indicate target sequence and detection certainty.</span>
-              <a id="downloadLink" href="" download class="btn btn-sm btn-outline-primary px-3">
-                📥 Download Annotated Image
-              </a>
+              <span class="text-muted small">Overlay tags indicate target sequence and certainty.</span>
+              <div class="d-flex gap-2">
+                <a id="downloadLink" href="" download class="btn btn-sm btn-outline-primary px-3">
+                  📥 Download Image
+                </a>
+                <button id="exportPdfBtn" type="button" class="btn btn-sm btn-pdf-export px-3 fw-semibold">
+                  📄 Export PDF Report
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -215,7 +227,7 @@
                     <span class="metric-header d-block">Drone Count</span>
                     <span id="metricDroneCount" class="metric-number font-mono">0</span>
                   </div>
-                  <span class="text-muted small mt-2">Detections above confidence threshold</span>
+                  <span class="text-muted small mt-2">Detections above confidence filter</span>
                 </div>
               </div>
 
@@ -274,198 +286,211 @@
 
       </section>
 
-      <!-- AI TACTICAL INTELLIGENCE BRIEFING (OLLAMA LLM) -->
-      <section class="card-dashboard mb-4">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <div class="d-flex align-items-center gap-2">
-            <h2 class="h5 mb-0 fw-bold">AI Swarm Tactical Intelligence Report</h2>
-            <span class="ai-badge font-mono">LLaMA 3 Neural Inference</span>
-          </div>
-          <button id="copyAiReportBtn" class="btn btn-sm btn-outline-secondary py-1 px-3">
-            📋 Copy Briefing
-          </button>
-        </div>
-        <div id="aiReportBox" class="ai-report-box">
-          <div id="aiReportContent" class="ai-report-content">
-            <!-- Rendered Markdown from Ollama LLM -->
-          </div>
-        </div>
-      </section>
+      <!-- SECTION SEPARATOR & SCROLL PANEL HEADER -->
+      <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+        <span class="text-muted small uppercase fw-bold font-mono">
+          ⬇️ Deep Analytical Telemetry & AI Intelligence (Scrollable Below)
+        </span>
+        <span class="badge bg-light text-secondary border font-mono">Contained Inspection View</span>
+      </div>
 
-      <!-- DETECTION CURVES & VISUAL ANALYTICS CHARTS -->
-      <section class="card-dashboard mb-4">
-        <h2 class="h5 mb-3 fw-bold">Detection Curves & Geometric Analytics</h2>
-        <div class="row g-4">
-          
-          <!-- Confidence Spectrum Curve -->
-          <div class="col-lg-6">
-            <div class="p-3 bg-light rounded border border-subtle h-100">
-              <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="text-muted small uppercase fw-bold">Confidence Distribution Curve</span>
-                <span class="badge bg-secondary font-mono">Rank vs Certainty</span>
-              </div>
-              <div class="chart-container">
-                <canvas id="confidenceChart"></canvas>
-              </div>
-              <span class="text-secondary small info-tooltip-caption d-block mt-2">
-                Plots detection rank against individual confidence score along with the mean threshold baseline.
-              </span>
-            </div>
-          </div>
-
-          <!-- Bounding Geometry & Size Breakdown Chart -->
-          <div class="col-lg-6">
-            <div class="p-3 bg-light rounded border border-subtle h-100">
-              <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="text-muted small uppercase fw-bold">Target Footprint & Size Spectrum</span>
-                <span class="badge bg-secondary font-mono">Pixel Area Distribution</span>
-              </div>
-              <div class="chart-container">
-                <canvas id="sizeChart"></canvas>
-              </div>
-              <span class="text-secondary small info-tooltip-caption d-block mt-2">
-                Visualizes target bounding box area tiers (Small &lt;600px², Medium 600-1500px², Large &gt;1500px²).
-              </span>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- ADVANCED SWARM ANALYTICS GRID -->
-      <section class="card-dashboard mb-4">
-        <h2 class="h5 mb-4 fw-bold">Telemetry Metrics</h2>
-        <div class="row g-4">
-          
-          <div class="col-md-6 col-lg-4">
-            <div class="p-3 bg-light rounded border border-subtle h-100">
-              <span class="text-muted d-block small uppercase fw-bold mb-1">Minimum Confidence</span>
-              <strong id="statMinConf" class="text-dark h5 mb-0 d-block font-mono">0%</strong>
-              <span class="text-secondary small info-tooltip-caption">Lowest confidence among positive detections.</span>
-            </div>
-          </div>
-
-          <div class="col-md-6 col-lg-4">
-            <div class="p-3 bg-light rounded border border-subtle h-100">
-              <span class="text-muted d-block small uppercase fw-bold mb-1">Maximum Confidence</span>
-              <strong id="statMaxConf" class="text-dark h5 mb-0 d-block font-mono">0%</strong>
-              <span class="text-secondary small info-tooltip-caption">Highest confidence detection in the current frame.</span>
-            </div>
-          </div>
-
-          <div class="col-md-6 col-lg-4">
-            <div class="p-3 bg-light rounded border border-subtle h-100">
-              <span class="text-muted d-block small uppercase fw-bold mb-1">Estimated Detection Footprint</span>
-              <strong id="statFootprint" class="text-dark h5 mb-0 d-block font-mono">0%</strong>
-              <span class="text-secondary small info-tooltip-caption">Percentage of image area covered by detected bounding boxes.</span>
-            </div>
-          </div>
-
-          <div class="col-md-6 col-lg-4">
-            <div class="p-3 bg-light rounded border border-subtle h-100">
-              <span class="text-muted d-block small uppercase fw-bold mb-1">Average Bounding Box Size</span>
-              <strong id="statAvgBboxSize" class="text-dark h5 mb-0 d-block font-mono">0 × 0 px</strong>
-              <span class="text-secondary small info-tooltip-caption">Mean width and height of detections. Represents pixel footprint.</span>
-            </div>
-          </div>
-
-          <div class="col-md-6 col-lg-4">
-            <div class="p-3 bg-light rounded border border-subtle h-100">
-              <span class="text-muted d-block small uppercase fw-bold mb-1">Spatial Spread Area</span>
-              <strong id="statSpatialSpread" class="text-dark h5 mb-0 d-block font-mono">0 × 0 px</strong>
-              <span class="text-secondary small info-tooltip-caption">Dimensions of bounding region enclosing all drone centers.</span>
-            </div>
-          </div>
-
-          <div class="col-md-6 col-lg-4">
-            <div class="p-3 bg-light rounded border border-subtle h-100">
-              <span class="text-muted d-block small uppercase fw-bold mb-1">Nearest Neighbor Distance (NND)</span>
-              <strong id="statNnd" class="text-dark h5 mb-0 d-block font-mono">0 px</strong>
-              <span class="text-secondary small info-tooltip-caption">Average proximity distance to the closest neighboring drone.</span>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- SPATIAL ANALYSIS & METADATA -->
-      <section class="row g-4 mb-4">
+      <!-- SCROLLABLE LOWER CONTAINER (Keeps Top Overview In Perspective) -->
+      <div id="deepAnalyticsScrollPanel" class="deep-analytics-scroll-panel">
         
-        <!-- Spatial Plotting Canvas -->
-        <div class="col-lg-6">
-          <div class="card-dashboard">
-            <h2 class="h5 mb-3 fw-bold">Spatial Coordinate Radar</h2>
-            <div class="canvas-container mb-2">
-              <canvas id="spatialCanvas" width="480" height="320"></canvas>
+        <!-- AI TACTICAL INTELLIGENCE BRIEFING (OLLAMA LLM) -->
+        <section class="card-dashboard mb-4">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex align-items-center gap-2">
+              <h2 class="h5 mb-0 fw-bold">AI Swarm Tactical Intelligence Report</h2>
+              <span class="ai-badge font-mono">LLaMA 3 Neural Inference</span>
             </div>
-            <div class="d-flex justify-content-between align-items-center px-1">
-              <span class="text-muted small">Blue Target = UAV Center | Red Cross = Swarm Centroid</span>
-              <span class="text-muted small font-mono">Normalized Space</span>
+            <button id="copyAiReportBtn" class="btn btn-sm btn-outline-secondary py-1 px-3">
+              📋 Copy Briefing
+            </button>
+          </div>
+          <div id="aiReportBox" class="ai-report-box">
+            <div id="aiReportContent" class="ai-report-content">
+              <!-- Rendered Markdown from Ollama LLM -->
             </div>
           </div>
-        </div>
+        </section>
 
-        <!-- Metadata & Image Details -->
-        <div class="col-lg-6">
-          <div class="d-flex flex-column justify-content-between h-100">
+        <!-- DETECTION CURVES & VISUAL ANALYTICS CHARTS -->
+        <section class="card-dashboard mb-4">
+          <h2 class="h5 mb-3 fw-bold">Detection Curves & Geometric Analytics</h2>
+          <div class="row g-4">
             
-            <div class="card-dashboard mb-3">
-              <h2 class="h5 mb-3 fw-bold">Rule-Based Deterministic Analysis</h2>
-              <div class="p-3 bg-light rounded border border-subtle">
-                <p id="sceneSummaryText" class="text-dark leading-relaxed mb-0" style="font-size: 0.92rem;"></p>
+            <!-- Confidence Spectrum Curve -->
+            <div class="col-lg-6">
+              <div class="p-3 bg-light rounded border border-subtle h-100">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <span class="text-muted small uppercase fw-bold">Confidence Distribution Curve</span>
+                  <span class="badge bg-secondary font-mono">Rank vs Certainty</span>
+                </div>
+                <div class="chart-container">
+                  <canvas id="confidenceChart"></canvas>
+                </div>
+                <span class="text-secondary small info-tooltip-caption d-block mt-2">
+                  Plots detection rank against individual confidence score along with the mean threshold baseline.
+                </span>
               </div>
-              <span class="text-secondary small mt-2 d-block">Baseline deterministic reduction based on spatial spread geometry.</span>
             </div>
 
-            <!-- Input Image Info Card -->
-            <div class="card-dashboard">
-              <h2 class="h5 mb-3 fw-bold">Input Image & Model Telemetry</h2>
-              <div class="row text-start">
-                <div class="col-6 mb-2">
-                  <span class="text-muted d-block small">Source Filename</span>
-                  <strong id="metaFilename" class="text-dark small font-mono">-</strong>
+            <!-- Bounding Geometry & Size Breakdown Chart -->
+            <div class="col-lg-6">
+              <div class="p-3 bg-light rounded border border-subtle h-100">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <span class="text-muted small uppercase fw-bold">Target Footprint & Size Spectrum</span>
+                  <span class="badge bg-secondary font-mono">Pixel Area Distribution</span>
                 </div>
-                <div class="col-6 mb-2">
-                  <span class="text-muted d-block small">Native Resolution</span>
-                  <strong id="metaDimensions" class="text-dark small font-mono">-</strong>
+                <div class="chart-container">
+                  <canvas id="sizeChart"></canvas>
                 </div>
-                <div class="col-6">
-                  <span class="text-muted d-block small">Inference Resolution</span>
-                  <strong id="metaInference" class="text-dark small font-mono">-</strong>
-                </div>
-                <div class="col-6">
-                  <span class="text-muted d-block small">Active Vision Model</span>
-                  <strong id="metaModel" class="text-dark small font-mono">-</strong>
-                </div>
+                <span class="text-secondary small info-tooltip-caption d-block mt-2">
+                  Visualizes target bounding box area tiers (Small &lt;600px², Medium 600-1500px², Large &gt;1500px²).
+                </span>
               </div>
             </div>
 
           </div>
-        </div>
+        </section>
 
-      </section>
+        <!-- ADVANCED SWARM ANALYTICS GRID -->
+        <section class="card-dashboard mb-4">
+          <h2 class="h5 mb-4 fw-bold">Telemetry Metrics</h2>
+          <div class="row g-4">
+            
+            <div class="col-md-6 col-lg-4">
+              <div class="p-3 bg-light rounded border border-subtle h-100">
+                <span class="text-muted d-block small uppercase fw-bold mb-1">Minimum Confidence</span>
+                <strong id="statMinConf" class="text-dark h5 mb-0 d-block font-mono">0%</strong>
+                <span class="text-secondary small info-tooltip-caption">Lowest confidence among positive detections.</span>
+              </div>
+            </div>
 
-      <!-- DETECTION DETAIL TABLE -->
-      <section class="card-dashboard mb-4">
-        <h2 class="h5 mb-3 fw-bold">Detected UAV Targets</h2>
-        <div class="table-responsive">
-          <table class="table table-technical table-hover border border-subtle mb-0">
-            <thead>
-              <tr>
-                <th style="width: 8%">#</th>
-                <th style="width: 18%">Confidence</th>
-                <th style="width: 18%">Center X</th>
-                <th style="width: 18%">Center Y</th>
-                <th style="width: 19%">Width</th>
-                <th style="width: 19%">Height</th>
-              </tr>
-            </thead>
-            <tbody id="detectionsTableBody" class="font-mono">
-              <!-- Dynamically populated rows -->
-            </tbody>
-          </table>
-        </div>
-      </section>
+            <div class="col-md-6 col-lg-4">
+              <div class="p-3 bg-light rounded border border-subtle h-100">
+                <span class="text-muted d-block small uppercase fw-bold mb-1">Maximum Confidence</span>
+                <strong id="statMaxConf" class="text-dark h5 mb-0 d-block font-mono">0%</strong>
+                <span class="text-secondary small info-tooltip-caption">Highest confidence detection in the current frame.</span>
+              </div>
+            </div>
+
+            <div class="col-md-6 col-lg-4">
+              <div class="p-3 bg-light rounded border border-subtle h-100">
+                <span class="text-muted d-block small uppercase fw-bold mb-1">Estimated Detection Footprint</span>
+                <strong id="statFootprint" class="text-dark h5 mb-0 d-block font-mono">0%</strong>
+                <span class="text-secondary small info-tooltip-caption">Percentage of image area covered by detected bounding boxes.</span>
+              </div>
+            </div>
+
+            <div class="col-md-6 col-lg-4">
+              <div class="p-3 bg-light rounded border border-subtle h-100">
+                <span class="text-muted d-block small uppercase fw-bold mb-1">Average Bounding Box Size</span>
+                <strong id="statAvgBboxSize" class="text-dark h5 mb-0 d-block font-mono">0 × 0 px</strong>
+                <span class="text-secondary small info-tooltip-caption">Mean width and height of detections. Represents pixel footprint.</span>
+              </div>
+            </div>
+
+            <div class="col-md-6 col-lg-4">
+              <div class="p-3 bg-light rounded border border-subtle h-100">
+                <span class="text-muted d-block small uppercase fw-bold mb-1">Spatial Spread Area</span>
+                <strong id="statSpatialSpread" class="text-dark h5 mb-0 d-block font-mono">0 × 0 px</strong>
+                <span class="text-secondary small info-tooltip-caption">Dimensions of bounding region enclosing all drone centers.</span>
+              </div>
+            </div>
+
+            <div class="col-md-6 col-lg-4">
+              <div class="p-3 bg-light rounded border border-subtle h-100">
+                <span class="text-muted d-block small uppercase fw-bold mb-1">Nearest Neighbor Distance (NND)</span>
+                <strong id="statNnd" class="text-dark h5 mb-0 d-block font-mono">0 px</strong>
+                <span class="text-secondary small info-tooltip-caption">Average proximity distance to the closest neighboring drone.</span>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- SPATIAL ANALYSIS & METADATA -->
+        <section class="row g-4 mb-4">
+          
+          <!-- Spatial Plotting Canvas -->
+          <div class="col-lg-6">
+            <div class="card-dashboard">
+              <h2 class="h5 mb-3 fw-bold">Spatial Coordinate Radar</h2>
+              <div class="canvas-container mb-2">
+                <canvas id="spatialCanvas" width="480" height="320"></canvas>
+              </div>
+              <div class="d-flex justify-content-between align-items-center px-1">
+                <span class="text-muted small">Blue Target = UAV Center | Red Cross = Swarm Centroid</span>
+                <span class="text-muted small font-mono">Normalized Space</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Metadata & Image Details -->
+          <div class="col-lg-6">
+            <div class="d-flex flex-column justify-content-between h-100">
+              
+              <div class="card-dashboard mb-3">
+                <h2 class="h5 mb-3 fw-bold">Rule-Based Deterministic Analysis</h2>
+                <div class="p-3 bg-light rounded border border-subtle">
+                  <p id="sceneSummaryText" class="text-dark leading-relaxed mb-0" style="font-size: 0.92rem;"></p>
+                </div>
+                <span class="text-secondary small mt-2 d-block">Baseline deterministic reduction based on spatial spread geometry.</span>
+              </div>
+
+              <!-- Input Image Info Card -->
+              <div class="card-dashboard">
+                <h2 class="h5 mb-3 fw-bold">Input Image & Model Telemetry</h2>
+                <div class="row text-start">
+                  <div class="col-6 mb-2">
+                    <span class="text-muted d-block small">Source Filename</span>
+                    <strong id="metaFilename" class="text-dark small font-mono">-</strong>
+                  </div>
+                  <div class="col-6 mb-2">
+                    <span class="text-muted d-block small">Native Resolution</span>
+                    <strong id="metaDimensions" class="text-dark small font-mono">-</strong>
+                  </div>
+                  <div class="col-6">
+                    <span class="text-muted d-block small">Inference Resolution</span>
+                    <strong id="metaInference" class="text-dark small font-mono">-</strong>
+                  </div>
+                  <div class="col-6">
+                    <span class="text-muted d-block small">Active Vision Model</span>
+                    <strong id="metaModel" class="text-dark small font-mono">-</strong>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </section>
+
+        <!-- DETECTION DETAIL TABLE -->
+        <section class="card-dashboard mb-4">
+          <h2 class="h5 mb-3 fw-bold">Detected UAV Targets</h2>
+          <div class="table-responsive">
+            <table class="table table-technical table-hover border border-subtle mb-0">
+              <thead>
+                <tr>
+                  <th style="width: 8%">#</th>
+                  <th style="width: 18%">Confidence</th>
+                  <th style="width: 18%">Center X</th>
+                  <th style="width: 18%">Center Y</th>
+                  <th style="width: 19%">Width</th>
+                  <th style="width: 19%">Height</th>
+                </tr>
+              </thead>
+              <tbody id="detectionsTableBody" class="font-mono">
+                <!-- Dynamically populated rows -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div> <!-- End of scrollable deep analytics panel -->
 
     </main>
 
