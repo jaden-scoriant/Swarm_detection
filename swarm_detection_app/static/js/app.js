@@ -12,6 +12,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorAlert = document.getElementById('errorAlert');
     const errorMessage = document.getElementById('errorMessage');
     
+    // Threat Elements
+    const threatBanner = document.getElementById('threatBanner');
+    const threatBannerBadge = document.getElementById('threatBannerBadge');
+
     // Sliders & Controls
     const thresholdSlider = document.getElementById('thresholdSlider');
     const thresholdValBadge = document.getElementById('thresholdValBadge');
@@ -276,6 +280,16 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Show container
         dashboardResult.classList.remove('d-none');
+
+        // Manage Reddish Threat Active State
+        if (analytics.alert === 'SWARM ALERT') {
+            document.body.classList.add('threat-active');
+            threatBanner.classList.remove('d-none');
+            threatBannerBadge.textContent = `${analytics.density.toUpperCase()} • ${analytics.drone_count} UAVs`;
+        } else {
+            document.body.classList.remove('threat-active');
+            threatBanner.classList.add('d-none');
+        }
         
         // Render images
         document.getElementById('annotatedImg').src = data.annotated_image_url;
@@ -290,7 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Alert Level Badge rendering
         const alertBadge = document.getElementById('metricAlertBadge');
         alertBadge.textContent = analytics.alert;
-        alertBadge.className = 'alert-badge';
+        alertBadge.className = 'alert-badge font-mono';
         if (analytics.alert === 'NONE') {
             alertBadge.classList.add('none');
         } else if (analytics.alert === 'NORMAL') {
@@ -339,7 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Render Interactive Detection Charts
-        renderConfidenceCurveChart(data.detections, analytics.average_confidence);
+        renderConfidenceCurveChart(data.detections, analytics.average_confidence, analytics.alert === 'SWARM ALERT');
         renderSizeDistributionChart(data.detections);
 
         // Canvas Drawing
@@ -358,7 +372,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><strong>#${idx + 1}</strong></td>
-                    <td><span class="badge bg-light text-dark border">${(det.confidence * 100).toFixed(1)}%</span></td>
+                    <td><span class="badge ${det.confidence >= 0.75 ? 'bg-success' : 'bg-light text-dark border'} font-mono">${(det.confidence * 100).toFixed(1)}%</span></td>
                     <td>${Math.round(det.center_x)} px</td>
                     <td>${Math.round(det.center_y)} px</td>
                     <td>${Math.round(det.width)} px</td>
@@ -398,7 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // 8. Render Detection Confidence Curve (Chart.js)
-    function renderConfidenceCurveChart(detections, avgConfidence) {
+    function renderConfidenceCurveChart(detections, avgConfidence, isThreatActive) {
         const ctx = document.getElementById('confidenceChart').getContext('2d');
         
         if (confidenceChartInstance) {
@@ -409,6 +423,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const confValues = detections.map(d => parseFloat((d.confidence * 100).toFixed(1)));
         const avgArray = Array(labels.length).fill(avgConfidence);
 
+        const curveColor = isThreatActive ? '#dc2626' : '#0284c7';
+        const curveBg = isThreatActive ? 'rgba(220, 38, 38, 0.14)' : 'rgba(2, 132, 199, 0.12)';
+
         confidenceChartInstance = new Chart(ctx, {
             type: 'line',
             data: {
@@ -417,19 +434,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     {
                         label: 'UAV Confidence (%)',
                         data: confValues.length > 0 ? confValues : [0],
-                        borderColor: '#0284c7',
-                        backgroundColor: 'rgba(2, 132, 199, 0.12)',
+                        borderColor: curveColor,
+                        backgroundColor: curveBg,
                         borderWidth: 2.5,
                         fill: true,
                         tension: 0.35,
-                        pointBackgroundColor: '#0284c7',
+                        pointBackgroundColor: curveColor,
                         pointRadius: 4,
                         pointHoverRadius: 6
                     },
                     {
                         label: 'Mean Confidence',
                         data: avgArray.length > 0 ? avgArray : [0],
-                        borderColor: '#10b981',
+                        borderColor: isThreatActive ? '#b91c1c' : '#10b981',
                         borderWidth: 1.5,
                         borderDash: [5, 5],
                         pointRadius: 0,
@@ -443,7 +460,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 plugins: {
                     legend: {
                         position: 'top',
-                        labels: { font: { size: 11 } }
+                        labels: { font: { size: 11, family: 'Inter' } }
                     },
                     tooltip: {
                         callbacks: {
@@ -457,10 +474,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     y: {
                         min: 0,
                         max: 100,
-                        ticks: { callback: v => v + '%' },
+                        ticks: { callback: v => v + '%', font: { family: 'JetBrains Mono' } },
                         grid: { color: '#f1f5f9' }
                     },
                     x: {
+                        ticks: { font: { family: 'JetBrains Mono' } },
                         grid: { color: '#f8fafc' }
                     }
                 }
@@ -517,10 +535,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 scales: {
                     y: {
                         beginAtZero: true,
-                        ticks: { stepSize: 1 },
+                        ticks: { stepSize: 1, font: { family: 'JetBrains Mono' } },
                         grid: { color: '#f1f5f9' }
                     },
                     x: {
+                        ticks: { font: { family: 'Inter', size: 11 } },
                         grid: { display: false }
                     }
                 }
@@ -540,11 +559,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const pad = 18;
         const cw = canvas.width;
         const ch = canvas.height;
+        const isThreat = analytics.alert === 'SWARM ALERT';
         
         ctx.clearRect(0, 0, cw, ch);
         
         // Radar circular range rings
-        ctx.strokeStyle = '#f1f5f9';
+        ctx.strokeStyle = isThreat ? '#fee2e2' : '#f1f5f9';
         ctx.lineWidth = 1;
         const centerX = cw / 2;
         const centerY = ch / 2;
@@ -571,7 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (detections.length === 0) {
             ctx.fillStyle = '#94a3b8';
-            ctx.font = '12px sans-serif';
+            ctx.font = '12px Inter, sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('No detections in active threshold', cw / 2, ch / 2);
@@ -595,12 +615,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const py2 = maxNy * (ch - 2 * pad) + pad;
         
         if (detections.length > 1) {
-            ctx.strokeStyle = 'rgba(13, 148, 136, 0.35)';
-            ctx.lineWidth = 1.8;
+            ctx.strokeStyle = isThreat ? 'rgba(220, 38, 38, 0.45)' : 'rgba(13, 148, 136, 0.35)';
+            ctx.lineWidth = isThreat ? 2 : 1.8;
             ctx.setLineDash([5, 4]);
             ctx.strokeRect(px1, py1, px2 - px1, py2 - py1);
             ctx.setLineDash([]);
-            ctx.fillStyle = 'rgba(13, 148, 136, 0.04)';
+            ctx.fillStyle = isThreat ? 'rgba(220, 38, 38, 0.06)' : 'rgba(13, 148, 136, 0.04)';
             ctx.fillRect(px1, py1, px2 - px1, py2 - py1);
         }
 
@@ -611,19 +631,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const x = nx * (cw - 2 * pad) + pad;
             const y = ny * (ch - 2 * pad) + pad;
             
-            ctx.fillStyle = '#0284c7';
+            const dotColor = isThreat ? '#dc2626' : '#0284c7';
+            ctx.fillStyle = dotColor;
             ctx.beginPath();
             ctx.arc(x, y, 4.5, 0, 2 * Math.PI);
             ctx.fill();
             
-            ctx.strokeStyle = 'rgba(2, 132, 199, 0.5)';
+            ctx.strokeStyle = isThreat ? 'rgba(220, 38, 38, 0.5)' : 'rgba(2, 132, 199, 0.5)';
             ctx.lineWidth = 1.2;
             ctx.beginPath();
             ctx.arc(x, y, 9, 0, 2 * Math.PI);
             ctx.stroke();
             
             ctx.fillStyle = '#475569';
-            ctx.font = 'bold 9px monospace';
+            ctx.font = 'bold 9px "JetBrains Mono", monospace';
             ctx.textAlign = 'left';
             ctx.fillText(`#${idx + 1}`, x + 11, y + 3);
         });
@@ -633,7 +654,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const ncy = (analytics.centroid_y / origH) * (ch - 2 * pad) + pad;
         
         ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 1.8;
+        ctx.lineWidth = 2;
         
         ctx.beginPath();
         ctx.moveTo(ncx - 12, ncy);
@@ -647,7 +668,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.stroke();
         
         ctx.fillStyle = '#ef4444';
-        ctx.font = 'bold 9px sans-serif';
+        ctx.font = 'bold 9px Inter, sans-serif';
         ctx.fillText('Swarm Centroid', ncx + 10, ncy - 8);
     }
 });
