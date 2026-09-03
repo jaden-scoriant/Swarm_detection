@@ -438,14 +438,14 @@ document.addEventListener('DOMContentLoaded', () => {
         reportDiv.style.fontFamily = "'Inter', sans-serif";
         reportDiv.style.backgroundColor = '#ffffff';
         reportDiv.style.color = '#0f172a';
-        // html2pdf/html2canvas needs the source in the document in order to
-        // measure its complete height. Keep it at the document origin (rather
-        // than off-screen, which produces a blank canvas) and behind the app.
+        // html2canvas only captures painted, in-document content reliably.
+        // Show this temporary export surface while the PDF is being rendered;
+        // it is removed as soon as the browser download begins.
         reportDiv.style.position = 'absolute';
         reportDiv.style.left = '0';
         reportDiv.style.top = '0';
-        reportDiv.style.zIndex = '-1';
-        reportDiv.style.pointerEvents = 'none';
+        reportDiv.style.zIndex = '2147483647';
+        reportDiv.style.minHeight = '100vh';
         reportDiv.style.width = '794px';
         reportDiv.style.boxSizing = 'border-box';
 
@@ -513,6 +513,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div style="font-size: 11px; font-weight: bold; color: ${isThreat ? '#991b1b' : '#7c3aed'}; margin-bottom: 8px;">AI TACTICAL BRIEFING (LLaMA 3 Neural Inference)</div>
                 <div style="font-size: 11px; line-height: 1.5; color: #334155;">
                     ${marked.parse(rawLlmMarkdown)}
+                </div>
+            </div>
+
+            <!-- Complete deterministic analysis and advanced telemetry -->
+            <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px; margin-bottom: 20px; page-break-inside: avoid;">
+                <div style="font-size: 11px; font-weight: bold; color: #475569; margin-bottom: 8px;">COMPLETE ANALYSIS &amp; TELEMETRY</div>
+                <p style="font-size: 11px; line-height: 1.5; color: #334155; margin: 0 0 10px 0;">${analytics.scene_analysis}</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 10px; color: #334155;">
+                    <div><strong>Minimum confidence:</strong> ${analytics.min_confidence}%</div>
+                    <div><strong>Maximum confidence:</strong> ${analytics.max_confidence}%</div>
+                    <div><strong>Average bounding box:</strong> ${analytics.bbox_avg_width} x ${analytics.bbox_avg_height} px</div>
+                    <div><strong>Bounding-box area range:</strong> ${analytics.bbox_smallest_area} - ${analytics.bbox_largest_area} px²</div>
+                    <div><strong>Swarm centroid:</strong> ${analytics.centroid_x}, ${analytics.centroid_y} px</div>
+                    <div><strong>Coordinate deviation:</strong> X ${analytics.std_dev_x} px, Y ${analytics.std_dev_y} px</div>
+                    <div><strong>Source resolution:</strong> ${meta.dimensions} px</div>
+                    <div><strong>Configured alert threshold:</strong> ${analytics.threshold} UAVs</div>
                 </div>
             </div>
 
@@ -585,11 +601,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 exportPdfBtn.removeAttribute('disabled');
                 exportPdfBtn.innerHTML = '📄 Export PDF Report';
             };
-            html2pdf().set(opt).from(reportDiv).save().then(() => {
-                resetPdfButton();
-            }).catch(err => {
-                console.error("PDF generation failed:", err);
-                resetPdfButton();
+            // Allow two paint frames before capture. This prevents html2canvas
+            // from snapshotting the element before its content has been laid out.
+            window.requestAnimationFrame(() => {
+                window.requestAnimationFrame(() => {
+                    html2pdf().set(opt).from(reportDiv).save().then(() => {
+                        resetPdfButton();
+                    }).catch(err => {
+                        console.error("PDF generation failed:", err);
+                        resetPdfButton();
+                    });
+                });
             });
         } else {
             window.print();
